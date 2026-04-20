@@ -29,6 +29,16 @@ export async function initializeDatabase() {
     await verificationCollection.createIndex({ expires_at: 1 }, { expireAfterSeconds: 0 }); // TTL index
   }
 
+  if (!collectionNames.includes('failed_reset_attempts')) {
+    await db.createCollection('failed_reset_attempts');
+    const failedAttemptsCollection = db.collection('failed_reset_attempts');
+    // Auto-delete records older than 24 hours
+    await failedAttemptsCollection.createIndex({ attempted_at: 1 }, { expireAfterSeconds: 86400 });
+    // Index for quick lookups
+    await failedAttemptsCollection.createIndex({ email: 1, attempted_at: -1 });
+    await failedAttemptsCollection.createIndex({ ip_address: 1, attempted_at: -1 });
+  }
+
   console.log('MongoDB connected successfully');
 }
 

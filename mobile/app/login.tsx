@@ -5,29 +5,25 @@ import {
   TouchableOpacity,
   Text,
   StyleSheet,
-  KeyboardAvoidingView,
-  Platform,
+  SafeAreaView,
   Alert,
   ActivityIndicator,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { ThemedView } from '@/components/themed-view';
-import { ThemedText } from '@/components/themed-text';
-import { useColorScheme } from '@/hooks/use-color-scheme';
+import { LinearGradient } from 'expo-linear-gradient';
+import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { useAuth } from '@/context/AuthContext';
 
 export default function LoginScreen() {
   const router = useRouter();
-  const colorScheme = useColorScheme();
   const { login, isLoading } = useAuth();
   
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [rememberMe, setRememberMe] = useState(true);
   const [localLoading, setLocalLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
-
-  const isDark = colorScheme === 'dark';
 
   const handleLogin = async () => {
     // Reset error message
@@ -100,92 +96,82 @@ export default function LoginScreen() {
   const loading = isLoading || localLoading;
 
   return (
-    <ThemedView style={styles.container}>
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={styles.keyboardView}
-      >
-        <View style={styles.content}>
-          {/* Header */}
-          <View style={styles.header}>
-            <ThemedText style={styles.title}>Rummikub</ThemedText>
-            <ThemedText style={styles.subtitle}>Welcome Back</ThemedText>
+    <LinearGradient
+      colors={['#0b1020', '#1b2250', '#0b1020']}
+      style={styles.gradient}
+    >
+      <SafeAreaView style={styles.safeArea}>
+        <View style={styles.container}>
+          {/* Logo */}
+          <View style={styles.logoRow}>
+            <Ionicons name="lock-closed" size={22} color="#f59e0b" />
+            <Text style={styles.logoText}>rummikub solver</Text>
           </View>
 
-          {/* Form */}
-          <View style={styles.form}>
+          {/* Card */}
+          <View style={styles.card}>
+            <Text style={styles.title}>Login</Text>
+            <Text style={styles.subtitle}>
+              Enter your email and password to continue
+            </Text>
+
             {/* Error Message */}
             {errorMessage ? (
-              <View style={[styles.errorBox, { backgroundColor: isDark ? '#5a2a2a' : '#ffe6e6' }]}>
-                <ThemedText style={[styles.errorText, { color: isDark ? '#ff9999' : '#cc0000' }]}>
-                  ⚠️ {errorMessage}
-                </ThemedText>
+              <View style={styles.errorBox}>
+                <Text style={styles.errorText}>⚠️ {errorMessage}</Text>
               </View>
             ) : null}
+
             {/* Email Input */}
             <View style={styles.inputContainer}>
-              <ThemedText style={styles.label}>Email</ThemedText>
+              <Ionicons name="person" size={20} color="#9db4ff" style={styles.inputIcon} />
               <TextInput
-                style={[
-                  styles.input,
-                  {
-                    borderColor: isDark ? '#444' : '#ddd',
-                    color: isDark ? '#fff' : '#000',
-                    backgroundColor: isDark ? '#1a1a1a' : '#f5f5f5',
-                  },
-                ]}
-                placeholder="you@example.com"
-                placeholderTextColor={isDark ? '#888' : '#aaa'}
+                style={styles.input}
+                placeholder="Email"
+                placeholderTextColor="#9ca3af"
                 value={email}
                 onChangeText={setEmail}
-                keyboardType="email-address"
                 autoCapitalize="none"
+                keyboardType="email-address"
                 editable={!loading}
               />
             </View>
 
             {/* Password Input */}
             <View style={styles.inputContainer}>
-              <View style={styles.passwordHeader}>
-                <ThemedText style={styles.label}>Password</ThemedText>
-              </View>
-              <View style={styles.passwordInputWrapper}>
-                <TextInput
-                  style={[
-                    styles.passwordInput,
-                    {
-                      borderColor: isDark ? '#444' : '#ddd',
-                      color: isDark ? '#fff' : '#000',
-                      backgroundColor: isDark ? '#1a1a1a' : '#f5f5f5',
-                    },
-                  ]}
-                  placeholder="Enter your password"
-                  placeholderTextColor={isDark ? '#888' : '#aaa'}
-                  value={password}
-                  onChangeText={setPassword}
-                  secureTextEntry={!showPassword}
-                  editable={!loading}
+              <MaterialIcons name="lock" size={20} color="#9db4ff" style={styles.inputIcon} />
+              <TextInput
+                style={styles.input}
+                placeholder="Password"
+                placeholderTextColor="#9ca3af"
+                value={password}
+                onChangeText={setPassword}
+                secureTextEntry={!showPassword}
+                editable={!loading}
+              />
+              <TouchableOpacity
+                onPress={() => setShowPassword(!showPassword)}
+                disabled={loading}
+                style={styles.eyeButton}
+              >
+                <Ionicons
+                  name={showPassword ? 'eye' : 'eye-off'}
+                  size={20}
+                  color="#9db4ff"
                 />
-                <TouchableOpacity
-                  style={styles.eyeButton}
-                  onPress={() => setShowPassword(!showPassword)}
-                  disabled={loading}
-                >
-                  <ThemedText style={styles.eyeIcon}>
-                    {showPassword ? '👁️' : '👁️‍🗨️'}
-                  </ThemedText>
-                </TouchableOpacity>
-              </View>
+              </TouchableOpacity>
             </View>
 
-            {/* Forgot Password */}
+            {/* Remember Me */}
             <TouchableOpacity
-              onPress={handleForgotPassword}
+              style={styles.rememberRow}
+              onPress={() => setRememberMe(!rememberMe)}
               disabled={loading}
             >
-              <ThemedText style={styles.forgotPassword}>
-                Forgot Password?
-              </ThemedText>
+              <View style={[styles.checkbox, rememberMe && styles.checkboxActive]}>
+                {rememberMe && <Ionicons name="checkmark" size={14} color="#fff" />}
+              </View>
+              <Text style={styles.rememberText}>Remember Me</Text>
             </TouchableOpacity>
 
             {/* Login Button */}
@@ -194,143 +180,188 @@ export default function LoginScreen() {
               onPress={handleLogin}
               disabled={loading}
             >
-              {loading ? (
-                <ActivityIndicator color="#fff" />
-              ) : (
-                <Text style={styles.loginButtonText}>Login</Text>
-              )}
+              <LinearGradient
+                colors={['#4f8dfd', '#73a9ff']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={styles.buttonGradient}
+              >
+                {loading ? (
+                  <ActivityIndicator color="#fff" size="large" />
+                ) : (
+                  <Text style={styles.loginButtonText}>LOGIN</Text>
+                )}
+              </LinearGradient>
+            </TouchableOpacity>
+
+            {/* Forgot Password */}
+            <TouchableOpacity onPress={handleForgotPassword} disabled={loading}>
+              <Text style={styles.forgotText}>Forgot Password?</Text>
             </TouchableOpacity>
           </View>
 
           {/* Sign Up Link */}
-          <View style={styles.footer}>
-            <ThemedText style={styles.footerText}>Don't have an account? </ThemedText>
+          <View style={styles.signupRow}>
+            <Text style={styles.signupText}>Don't have an account? </Text>
             <TouchableOpacity onPress={handleSignUp} disabled={loading}>
-              <ThemedText style={styles.signUpLink}>Sign Up</ThemedText>
+              <Text style={styles.signupLink}>Sign Up</Text>
             </TouchableOpacity>
           </View>
         </View>
-      </KeyboardAvoidingView>
-    </ThemedView>
+      </SafeAreaView>
+    </LinearGradient>
   );
 }
 
 const styles = StyleSheet.create({
+  gradient: {
+    flex: 1,
+  },
+  safeArea: {
+    flex: 1,
+  },
   container: {
     flex: 1,
-  },
-  keyboardView: {
-    flex: 1,
-  },
-  content: {
-    flex: 1,
+    justifyContent: 'center',
     paddingHorizontal: 24,
-    justifyContent: 'flex-start',
-    paddingTop: Platform.OS === 'ios' ? 60 : 120,
-    paddingBottom: 40,
   },
-  header: {
-    marginBottom: Platform.OS === 'ios' ? 30 : 60,
+  logoRow: {
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 18,
+  },
+  logoText: {
+    color: '#ffffff',
+    fontSize: 28,
+    fontWeight: '600',
+    marginLeft: 8,
+    letterSpacing: 0.5,
+  },
+  card: {
+    backgroundColor: 'rgba(12, 18, 40, 0.35)',
+    borderRadius: 22,
+    padding: 24,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+    marginBottom: 20,
   },
   title: {
-    fontSize: Platform.OS === 'ios' ? 24 : 40,
-    fontWeight: 'bold',
-    marginBottom: 16,
+    color: '#ffffff',
+    fontSize: 34,
+    fontWeight: '700',
+    textAlign: 'center',
+    marginBottom: 10,
   },
   subtitle: {
-    fontSize: Platform.OS === 'ios' ? 14 : 18,
-    opacity: 0.7,
-  },
-  form: {
-    gap: 16,
+    color: '#d1d5db',
+    textAlign: 'center',
+    fontSize: 16,
+    marginBottom: 24,
+    lineHeight: 22,
   },
   inputContainer: {
-    marginBottom: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(10, 15, 35, 0.65)',
+    borderWidth: 1,
+    borderColor: 'rgba(130,150,255,0.18)',
+    borderRadius: 12,
+    marginBottom: 14,
+    paddingHorizontal: 12,
+    height: 54,
   },
-  label: {
-    fontSize: 14,
-    fontWeight: '600',
-    marginBottom: 8,
+  inputIcon: {
+    marginRight: 10,
   },
   input: {
-    borderWidth: 1,
-    borderRadius: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    fontSize: 16,
-  },
-  passwordHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 8,
-  },
-  passwordInputWrapper: {
-    position: 'relative',
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  passwordInput: {
     flex: 1,
-    borderWidth: 1,
-    borderRadius: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    fontSize: 16,
-    paddingRight: 48,
+    color: '#ffffff',
+    fontSize: 17,
   },
   eyeButton: {
-    position: 'absolute',
-    right: 12,
     padding: 8,
   },
-  eyeIcon: {
-    fontSize: 20,
+  rememberRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 6,
+    marginBottom: 20,
   },
-  forgotPassword: {
-    fontSize: 14,
-    color: '#007AFF',
-    textAlign: 'right',
-    marginTop: 8,
+  checkbox: {
+    width: 22,
+    height: 22,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#7c8db5',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+    backgroundColor: 'transparent',
+  },
+  checkboxActive: {
+    backgroundColor: '#4f8dfd',
+    borderColor: '#4f8dfd',
+  },
+  rememberText: {
+    color: '#d1d5db',
+    fontSize: 16,
   },
   loginButton: {
-    backgroundColor: '#007AFF',
-    borderRadius: 8,
-    paddingVertical: 14,
-    alignItems: 'center',
-    marginTop: 24,
+    borderRadius: 14,
+    overflow: 'hidden',
+    marginBottom: 20,
+    marginTop: 4,
+    shadowColor: '#4f8dfd',
+    shadowOpacity: 0.35,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 6,
   },
   loginButtonDisabled: {
     opacity: 0.6,
   },
-  loginButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
+  buttonGradient: {
+    paddingVertical: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  footer: {
+  loginButtonText: {
+    color: '#ffffff',
+    fontSize: 22,
+    fontWeight: '700',
+    letterSpacing: 1,
+  },
+  forgotText: {
+    color: '#9db4ff',
+    textAlign: 'center',
+    fontSize: 17,
+  },
+  signupRow: {
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
   },
-  footerText: {
-    fontSize: 14,
-    opacity: 0.7,
+  signupText: {
+    color: '#d1d5db',
+    fontSize: 16,
   },
-  signUpLink: {
-    fontSize: 14,
-    color: '#007AFF',
+  signupLink: {
+    color: '#9db4ff',
+    fontSize: 16,
     fontWeight: '600',
   },
   errorBox: {
+    backgroundColor: 'rgba(239, 68, 68, 0.1)',
     borderRadius: 8,
     paddingVertical: 12,
     paddingHorizontal: 16,
     marginBottom: 16,
     borderLeftWidth: 4,
-    borderLeftColor: '#cc0000',
+    borderLeftColor: '#ef4444',
   },
   errorText: {
+    color: '#fca5a5',
     fontSize: 14,
     fontWeight: '500',
   },

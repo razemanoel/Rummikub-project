@@ -2,6 +2,7 @@ import dotenv from 'dotenv';
 import express from 'express';
 import cors from 'cors';
 import { initializeDatabase, closeDatabase } from './config/database';
+import { initializeEmailService } from './services/emailService';
 import { errorHandler } from './middleware/auth';
 import authRoutes from './routes/auth';
 
@@ -41,6 +42,9 @@ async function startServer() {
     // Initialize database
     await initializeDatabase();
     console.log('Database initialized');
+
+    // Initialize email service
+    await initializeEmailService();
 
     // Start listening
     app.listen(PORT, () => {

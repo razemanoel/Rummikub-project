@@ -5,19 +5,17 @@ import {
   TouchableOpacity,
   Text,
   StyleSheet,
-  KeyboardAvoidingView,
-  Platform,
+  SafeAreaView,
   Alert,
   ActivityIndicator,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { ThemedView } from '@/components/themed-view';
-import { ThemedText } from '@/components/themed-text';
-import { useColorScheme } from '@/hooks/use-color-scheme';
+import { LinearGradient } from 'expo-linear-gradient';
+import { Ionicons, MaterialIcons } from '@expo/vector-icons';
+import { api } from '../services/api';
 
 export default function ForgotPasswordScreen() {
   const router = useRouter();
-  const colorScheme = useColorScheme();
   const [step, setStep] = useState(1); // 1: email, 2: verify code, 3: reset password
   const [email, setEmail] = useState('');
   const [verificationCode, setVerificationCode] = useState('');
@@ -26,8 +24,7 @@ export default function ForgotPasswordScreen() {
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-
-  const isDark = colorScheme === 'dark';
+  const [errorMessage, setErrorMessage] = useState('');
 
   // Step 1: Send reset email
   const handleSendResetEmail = async () => {
@@ -43,14 +40,29 @@ export default function ForgotPasswordScreen() {
     }
 
     setLoading(true);
+    setErrorMessage('');
     try {
-      // TODO: Replace with actual API call
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      console.log('Reset email sent to:', email);
-      Alert.alert('Success', 'Reset code sent to your email');
-      setStep(2);
-    } catch (error) {
-      Alert.alert('Error', 'Failed to send reset email. Please try again.');
+      const response = await api.post('/auth/forgot-password', {
+        email: email.trim().toLowerCase(),
+      });
+
+      if (response.data?.success) {
+        Alert.alert('Success', 'Verification code sent to your email');
+        setStep(2);
+      } else {
+        Alert.alert('Error', response.data?.message || 'Failed to send reset email');
+      }
+    } catch (error: any) {
+      // Handle rate limiting (429)
+      if (error.response?.status === 429) {
+        const message = error.response?.data?.message || 'Too many attempts. Please try again later.';
+        setErrorMessage(message);
+        Alert.alert('Too Many Attempts', message);
+      } else {
+        const errorMsg = error.response?.data?.message || 'Failed to send reset email. Please try again.';
+        setErrorMessage(errorMsg);
+        Alert.alert('Error', errorMsg);
+      }
     } finally {
       setLoading(false);
     }
@@ -64,13 +76,32 @@ export default function ForgotPasswordScreen() {
     }
 
     setLoading(true);
+    setErrorMessage('');
     try {
-      // TODO: Replace with actual API call
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      console.log('Code verified:', verificationCode);
-      setStep(3);
-    } catch (error) {
-      Alert.alert('Error', 'Invalid verification code. Please try again.');
+      // Note: Backend just validates the code exists
+      // The actual consumption happens during password reset
+      const response = await api.post('/auth/verify-code', {
+        email: email.trim().toLowerCase(),
+        code: verificationCode.trim(),
+      });
+
+      if (response.data?.success) {
+        setStep(3);
+      } else {
+        const errorMsg = response.data?.message || 'Invalid verification code';
+        setErrorMessage(errorMsg);
+        Alert.alert('Error', errorMsg);
+      }
+    } catch (error: any) {
+      if (error.response?.status === 429) {
+        const message = error.response?.data?.message || 'Too many attempts. Please try again later.';
+        setErrorMessage(message);
+        Alert.alert('Too Many Attempts', message);
+      } else {
+        const errorMsg = error.response?.data?.message || 'Invalid verification code. Please try again.';
+        setErrorMessage(errorMsg);
+        Alert.alert('Error', errorMsg);
+      }
     } finally {
       setLoading(false);
     }
@@ -94,14 +125,33 @@ export default function ForgotPasswordScreen() {
     }
 
     setLoading(true);
+    setErrorMessage('');
     try {
-      // TODO: Replace with actual API call
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      console.log('Password reset for:', email);
-      Alert.alert('Success', 'Your password has been reset. Please login with your new password.');
-      router.replace('/login');
-    } catch (error) {
-      Alert.alert('Error', 'Failed to reset password. Please try again.');
+      const response = await api.post('/auth/reset-password', {
+        email: email.trim().toLowerCase(),
+        code: verificationCode.trim(),
+        newPassword: newPassword.trim(),
+        confirmPassword: confirmPassword.trim(),
+      });
+
+      if (response.data?.success) {
+        Alert.alert('Success', 'Your password has been reset. Please login with your new password.');
+        router.replace('/login');
+      } else {
+        const errorMsg = error.response?.data?.message || 'Failed to reset password';
+        setErrorMessage(errorMsg);
+        Alert.alert('Error', errorMsg);
+      }
+    } catch (error: any) {
+      if (error.response?.status === 429) {
+        const message = error.response?.data?.message || 'Too many attempts. Please try again later.';
+        setErrorMessage(message);
+        Alert.alert('Too Many Attempts', message);
+      } else {
+        const errorMsg = error.response?.data?.message || 'Failed to reset password. Please try again.';
+        setErrorMessage(errorMsg);
+        Alert.alert('Error', errorMsg);
+      }
     } finally {
       setLoading(false);
     }
@@ -110,55 +160,50 @@ export default function ForgotPasswordScreen() {
   const handleBack = () => {
     if (step > 1) {
       setStep(step - 1);
+      setErrorMessage('');
     } else {
       router.back();
     }
   };
 
   return (
-    <ThemedView style={styles.container}>
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={styles.keyboardView}
-      >
-        <View style={styles.content}>
-          {/* Back Button */}
-          <TouchableOpacity
-            style={styles.backButton}
-            onPress={handleBack}
-            disabled={loading}
-          >
-            <Text style={styles.backButtonText}>← Back</Text>
-          </TouchableOpacity>
+    <LinearGradient
+      colors={['#0b1020', '#1b2250', '#0b1020']}
+      style={styles.gradient}
+    >
+      <SafeAreaView style={styles.safeArea}>
+        <View style={styles.container}>
+          {/* Logo */}
+          <View style={styles.logoRow}>
+            <Ionicons name="key" size={22} color="#f59e0b" />
+            <Text style={styles.logoText}>rummikub solver</Text>
+          </View>
 
-          {/* Header */}
-          <View style={styles.header}>
-            <ThemedText style={styles.title}>Reset Password</ThemedText>
-            <ThemedText style={styles.subtitle}>
+          {/* Card */}
+          <View style={styles.card}>
+            <Text style={styles.title}>Reset Password</Text>
+            <Text style={styles.subtitle}>
               {step === 1 && 'Enter your email address'}
               {step === 2 && 'Enter the verification code'}
               {step === 3 && 'Create your new password'}
-            </ThemedText>
-          </View>
+            </Text>
 
-          {/* Form */}
-          <View style={styles.form}>
+            {/* Error Message */}
+            {errorMessage ? (
+              <View style={styles.errorBox}>
+                <Text style={styles.errorText}>⚠️ {errorMessage}</Text>
+              </View>
+            ) : null}
+
             {/* Step 1: Email */}
             {step === 1 && (
               <>
                 <View style={styles.inputContainer}>
-                  <ThemedText style={styles.label}>Email Address</ThemedText>
+                  <Ionicons name="mail" size={20} color="#9db4ff" style={styles.inputIcon} />
                   <TextInput
-                    style={[
-                      styles.input,
-                      {
-                        borderColor: isDark ? '#444' : '#ddd',
-                        color: isDark ? '#fff' : '#000',
-                        backgroundColor: isDark ? '#1a1a1a' : '#f5f5f5',
-                      },
-                    ]}
-                    placeholder="you@example.com"
-                    placeholderTextColor={isDark ? '#888' : '#aaa'}
+                    style={styles.input}
+                    placeholder="Email Address"
+                    placeholderTextColor="#9ca3af"
                     value={email}
                     onChangeText={setEmail}
                     keyboardType="email-address"
@@ -172,11 +217,18 @@ export default function ForgotPasswordScreen() {
                   onPress={handleSendResetEmail}
                   disabled={loading}
                 >
-                  {loading ? (
-                    <ActivityIndicator color="#fff" />
-                  ) : (
-                    <Text style={styles.buttonText}>Send Reset Code</Text>
-                  )}
+                  <LinearGradient
+                    colors={['#4f8dfd', '#73a9ff']}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 0 }}
+                    style={styles.buttonGradient}
+                  >
+                    {loading ? (
+                      <ActivityIndicator color="#fff" size="large" />
+                    ) : (
+                      <Text style={styles.buttonText}>SEND RESET CODE</Text>
+                    )}
+                  </LinearGradient>
                 </TouchableOpacity>
               </>
             )}
@@ -184,22 +236,15 @@ export default function ForgotPasswordScreen() {
             {/* Step 2: Verification Code */}
             {step === 2 && (
               <>
+                <Text style={styles.helperText}>
+                  Enter the 6-digit code sent to {email}
+                </Text>
                 <View style={styles.inputContainer}>
-                  <ThemedText style={styles.label}>Verification Code</ThemedText>
-                  <ThemedText style={styles.helperText}>
-                    Enter the 6-digit code sent to {email}
-                  </ThemedText>
+                  <Ionicons name="lock" size={20} color="#9db4ff" style={styles.inputIcon} />
                   <TextInput
-                    style={[
-                      styles.input,
-                      {
-                        borderColor: isDark ? '#444' : '#ddd',
-                        color: isDark ? '#fff' : '#000',
-                        backgroundColor: isDark ? '#1a1a1a' : '#f5f5f5',
-                      },
-                    ]}
+                    style={styles.input}
                     placeholder="000000"
-                    placeholderTextColor={isDark ? '#888' : '#aaa'}
+                    placeholderTextColor="#9ca3af"
                     value={verificationCode}
                     onChangeText={setVerificationCode}
                     keyboardType="numeric"
@@ -213,17 +258,24 @@ export default function ForgotPasswordScreen() {
                   onPress={handleVerifyCode}
                   disabled={loading}
                 >
-                  {loading ? (
-                    <ActivityIndicator color="#fff" />
-                  ) : (
-                    <Text style={styles.buttonText}>Verify Code</Text>
-                  )}
+                  <LinearGradient
+                    colors={['#4f8dfd', '#73a9ff']}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 0 }}
+                    style={styles.buttonGradient}
+                  >
+                    {loading ? (
+                      <ActivityIndicator color="#fff" size="large" />
+                    ) : (
+                      <Text style={styles.buttonText}>VERIFY CODE</Text>
+                    )}
+                  </LinearGradient>
                 </TouchableOpacity>
 
                 <View style={styles.resendContainer}>
-                  <ThemedText style={styles.resendText}>Didn't receive the code? </ThemedText>
+                  <Text style={styles.resendText}>Didn't receive the code? </Text>
                   <TouchableOpacity onPress={handleSendResetEmail} disabled={loading}>
-                    <ThemedText style={styles.resendLink}>Resend</ThemedText>
+                    <Text style={styles.resendLink}>Resend</Text>
                   </TouchableOpacity>
                 </View>
               </>
@@ -233,65 +285,51 @@ export default function ForgotPasswordScreen() {
             {step === 3 && (
               <>
                 <View style={styles.inputContainer}>
-                  <ThemedText style={styles.label}>New Password</ThemedText>
-                  <View style={styles.passwordInputWrapper}>
-                    <TextInput
-                      style={[
-                        styles.passwordInput,
-                        {
-                          borderColor: isDark ? '#444' : '#ddd',
-                          color: isDark ? '#fff' : '#000',
-                          backgroundColor: isDark ? '#1a1a1a' : '#f5f5f5',
-                        },
-                      ]}
-                      placeholder="Enter your new password"
-                      placeholderTextColor={isDark ? '#888' : '#aaa'}
-                      value={newPassword}
-                      onChangeText={setNewPassword}
-                      secureTextEntry={!showPassword}
-                      editable={!loading}
+                  <MaterialIcons name="lock" size={20} color="#9db4ff" style={styles.inputIcon} />
+                  <TextInput
+                    style={styles.input}
+                    placeholder="New Password"
+                    placeholderTextColor="#9ca3af"
+                    value={newPassword}
+                    onChangeText={setNewPassword}
+                    secureTextEntry={!showPassword}
+                    editable={!loading}
+                  />
+                  <TouchableOpacity
+                    onPress={() => setShowPassword(!showPassword)}
+                    disabled={loading}
+                    style={styles.eyeButton}
+                  >
+                    <Ionicons
+                      name={showPassword ? 'eye' : 'eye-off'}
+                      size={20}
+                      color="#9db4ff"
                     />
-                    <TouchableOpacity
-                      style={styles.eyeButton}
-                      onPress={() => setShowPassword(!showPassword)}
-                      disabled={loading}
-                    >
-                      <ThemedText style={styles.eyeIcon}>
-                        {showPassword ? '👁️' : '👁️‍🗨️'}
-                      </ThemedText>
-                    </TouchableOpacity>
-                  </View>
+                  </TouchableOpacity>
                 </View>
 
                 <View style={styles.inputContainer}>
-                  <ThemedText style={styles.label}>Confirm Password</ThemedText>
-                  <View style={styles.passwordInputWrapper}>
-                    <TextInput
-                      style={[
-                        styles.passwordInput,
-                        {
-                          borderColor: isDark ? '#444' : '#ddd',
-                          color: isDark ? '#fff' : '#000',
-                          backgroundColor: isDark ? '#1a1a1a' : '#f5f5f5',
-                        },
-                      ]}
-                      placeholder="Confirm your new password"
-                      placeholderTextColor={isDark ? '#888' : '#aaa'}
-                      value={confirmPassword}
-                      onChangeText={setConfirmPassword}
-                      secureTextEntry={!showConfirmPassword}
-                      editable={!loading}
+                  <MaterialIcons name="lock" size={20} color="#9db4ff" style={styles.inputIcon} />
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Confirm Password"
+                    placeholderTextColor="#9ca3af"
+                    value={confirmPassword}
+                    onChangeText={setConfirmPassword}
+                    secureTextEntry={!showConfirmPassword}
+                    editable={!loading}
+                  />
+                  <TouchableOpacity
+                    onPress={() => setShowConfirmPassword(!showConfirmPassword)}
+                    disabled={loading}
+                    style={styles.eyeButton}
+                  >
+                    <Ionicons
+                      name={showConfirmPassword ? 'eye' : 'eye-off'}
+                      size={20}
+                      color="#9db4ff"
                     />
-                    <TouchableOpacity
-                      style={styles.eyeButton}
-                      onPress={() => setShowConfirmPassword(!showConfirmPassword)}
-                      disabled={loading}
-                    >
-                      <ThemedText style={styles.eyeIcon}>
-                        {showConfirmPassword ? '👁️' : '👁️‍🗨️'}
-                      </ThemedText>
-                    </TouchableOpacity>
-                  </View>
+                  </TouchableOpacity>
                 </View>
 
                 <TouchableOpacity
@@ -299,154 +337,182 @@ export default function ForgotPasswordScreen() {
                   onPress={handleResetPassword}
                   disabled={loading}
                 >
-                  {loading ? (
-                    <ActivityIndicator color="#fff" />
-                  ) : (
-                    <Text style={styles.buttonText}>Reset Password</Text>
-                  )}
+                  <LinearGradient
+                    colors={['#4f8dfd', '#73a9ff']}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 0 }}
+                    style={styles.buttonGradient}
+                  >
+                    {loading ? (
+                      <ActivityIndicator color="#fff" size="large" />
+                    ) : (
+                      <Text style={styles.buttonText}>RESET PASSWORD</Text>
+                    )}
+                  </LinearGradient>
                 </TouchableOpacity>
               </>
             )}
           </View>
 
-          {/* Bottom Link */}
+          {/* Back/Login Link */}
           <View style={styles.footer}>
-            <ThemedText style={styles.footerText}>Remember your password? </ThemedText>
-            <TouchableOpacity onPress={() => router.replace('/login')} disabled={loading}>
-              <ThemedText style={styles.loginLink}>Login</ThemedText>
+            <Text style={styles.footerText}>
+              {step === 1 ? "Remember your password? " : "Back to login? "}
+            </Text>
+            <TouchableOpacity
+              onPress={step > 1 ? handleBack : () => router.replace('/login')}
+              disabled={loading}
+            >
+              <Text style={styles.footerLink}>{step > 1 ? 'Go Back' : 'Login'}</Text>
             </TouchableOpacity>
           </View>
         </View>
-      </KeyboardAvoidingView>
-    </ThemedView>
+      </SafeAreaView>
+    </LinearGradient>
   );
 }
 
 const styles = StyleSheet.create({
+  gradient: {
+    flex: 1,
+  },
+  safeArea: {
+    flex: 1,
+  },
   container: {
     flex: 1,
-  },
-  keyboardView: {
-    flex: 1,
-  },
-  content: {
-    flex: 1,
+    justifyContent: 'center',
     paddingHorizontal: 24,
-    justifyContent: 'flex-start',
-    paddingTop: Platform.OS === 'ios' ? 60 : 120,
-    paddingBottom: 40,
   },
-  backButton: {
-    marginBottom: 20,
-    padding: 8,
-    alignSelf: 'flex-start',
-  },
-  backButtonText: {
-    fontSize: 14,
-    color: '#007AFF',
-    fontWeight: '600',
-  },
-  header: {
-    marginBottom: Platform.OS === 'ios' ? 30 : 60,
-    alignItems: 'center',
-  },
-  title: {
-    fontSize: Platform.OS === 'ios' ? 24 : 40,
-    fontWeight: 'bold',
-    marginBottom: 16,
-  },
-  subtitle: {
-    fontSize: Platform.OS === 'ios' ? 14 : 18,
-    opacity: 0.7,
-  },
-  form: {
-    gap: 16,
-  },
-  inputContainer: {
-    marginBottom: 8,
-  },
-  label: {
-    fontSize: 14,
-    fontWeight: '600',
-    marginBottom: 8,
-  },
-  helperText: {
-    fontSize: 12,
-    opacity: 0.6,
-    marginBottom: 8,
-  },
-  input: {
-    borderWidth: 1,
-    borderRadius: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    fontSize: 16,
-  },
-  passwordInputWrapper: {
-    position: 'relative',
+  logoRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 18,
   },
-  passwordInput: {
-    flex: 1,
+  logoText: {
+    color: '#ffffff',
+    fontSize: 28,
+    fontWeight: '600',
+    marginLeft: 8,
+    letterSpacing: 0.5,
+  },
+  card: {
+    backgroundColor: 'rgba(12, 18, 40, 0.35)',
+    borderRadius: 22,
+    padding: 24,
     borderWidth: 1,
-    borderRadius: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    borderColor: 'rgba(255,255,255,0.08)',
+    marginBottom: 20,
+  },
+  title: {
+    color: '#ffffff',
+    fontSize: 34,
+    fontWeight: '700',
+    textAlign: 'center',
+    marginBottom: 10,
+  },
+  subtitle: {
+    color: '#d1d5db',
+    textAlign: 'center',
     fontSize: 16,
-    paddingRight: 48,
+    marginBottom: 24,
+    lineHeight: 22,
+  },
+  helperText: {
+    color: '#9ca3af',
+    fontSize: 14,
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  inputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(10, 15, 35, 0.65)',
+    borderWidth: 1,
+    borderColor: 'rgba(130,150,255,0.18)',
+    borderRadius: 12,
+    marginBottom: 14,
+    paddingHorizontal: 12,
+    height: 54,
+  },
+  inputIcon: {
+    marginRight: 10,
+  },
+  input: {
+    flex: 1,
+    color: '#ffffff',
+    fontSize: 17,
   },
   eyeButton: {
-    position: 'absolute',
-    right: 12,
     padding: 8,
   },
-  eyeIcon: {
-    fontSize: 20,
-  },
   button: {
-    backgroundColor: '#007AFF',
-    borderRadius: 8,
-    paddingVertical: 14,
-    alignItems: 'center',
-    marginTop: 24,
+    borderRadius: 14,
+    overflow: 'hidden',
+    marginBottom: 16,
+    marginTop: 8,
+    shadowColor: '#4f8dfd',
+    shadowOpacity: 0.35,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 6,
   },
   buttonDisabled: {
     opacity: 0.6,
   },
+  buttonGradient: {
+    paddingVertical: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   buttonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
+    color: '#ffffff',
+    fontSize: 22,
+    fontWeight: '700',
+    letterSpacing: 1,
   },
   resendContainer: {
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    marginTop: 20,
+    marginTop: 8,
   },
   resendText: {
+    color: '#9ca3af',
     fontSize: 14,
-    opacity: 0.7,
   },
   resendLink: {
+    color: '#9db4ff',
     fontSize: 14,
-    color: '#007AFF',
     fontWeight: '600',
   },
   footer: {
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    marginTop: 40,
   },
   footerText: {
-    fontSize: 14,
-    opacity: 0.7,
+    color: '#d1d5db',
+    fontSize: 16,
   },
-  loginLink: {
-    fontSize: 14,
-    color: '#007AFF',
+  footerLink: {
+    color: '#9db4ff',
+    fontSize: 16,
     fontWeight: '600',
+  },
+  errorBox: {
+    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+    borderRadius: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    marginBottom: 16,
+    borderLeftWidth: 4,
+    borderLeftColor: '#ef4444',
+  },
+  errorText: {
+    color: '#fca5a5',
+    fontSize: 14,
+    fontWeight: '500',
   },
 });

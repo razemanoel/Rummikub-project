@@ -1,10 +1,24 @@
 import { Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
-import { UserModel, VerificationCode } from '../models/User';
+import { UserModel, VerificationCode, FailedResetAttempt } from '../models/User';
 import { generateToken } from '../config/jwt';
+import { sendVerificationCodeEmail } from '../services/emailService';
 
 // Email validation regex
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+// Rate limiting constants
+const MAX_ATTEMPTS_PER_EMAIL_PER_HOUR = 5;
+const MAX_ATTEMPTS_PER_IP_PER_HOUR = 20;
+
+// Helper function to get client IP address
+function getClientIP(req: AuthRequest): string {
+  return (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() ||
+         (req.headers['x-real-ip'] as string) ||
+         req.ip ||
+         req.connection?.remoteAddress ||
+         'unknown';
+}
 
 // Helper function to validate and normalize email
 function validateAndNormalizeEmail(email: string): { isValid: true; normalizedEmail: string } | { isValid: false } {
@@ -162,10 +176,14 @@ export class AuthController {
   static async forgotPassword(req: AuthRequest, res: Response) {
     try {
       const { email } = req.body;
+      const clientIP = getClientIP(req);
+
+      console.log(`\n📨 [FORGOT_PASSWORD] Request received from IP: ${clientIP}, Email: ${email}`);
 
       // Validate and normalize email
       const emailValidation = validateAndNormalizeEmail(email);
       if (!emailValidation.isValid) {
+        console.warn(`⚠️  [FORGOT_PASSWORD] Invalid email format: ${email}`);
         return res.status(400).json({
           success: false,
           message: 'Invalid email format',
@@ -173,9 +191,34 @@ export class AuthController {
       }
 
       const normalizedEmail = emailValidation.normalizedEmail;
+
+      // Check rate limiting by email
+      const emailAttempts = await FailedResetAttempt.getRecentAttempts(normalizedEmail, 60);
+      if (emailAttempts >= MAX_ATTEMPTS_PER_EMAIL_PER_HOUR) {
+        console.warn(`🚫 [SECURITY] Too many password reset attempts for email: ${normalizedEmail} from IP: ${clientIP}`);
+        return res.status(429).json({
+          success: false,
+          message: 'Too many password reset attempts. Please try again later.',
+        });
+      }
+
+      // Check rate limiting by IP
+      const ipAttempts = await FailedResetAttempt.getAttemptsByIP(clientIP, 60);
+      if (ipAttempts >= MAX_ATTEMPTS_PER_IP_PER_HOUR) {
+        console.warn(`🚫 [SECURITY] Too many password reset attempts from IP: ${clientIP}`);
+        return res.status(429).json({
+          success: false,
+          message: 'Too many password reset attempts. Please try again later.',
+        });
+      }
+
       // Check if user exists
       const user = await UserModel.findByEmail(normalizedEmail);
       if (!user) {
+        // Record failed attempt (email doesn't exist)
+        await FailedResetAttempt.record(normalizedEmail, clientIP);
+        console.warn(`⚠️  [SECURITY] Password reset attempt with non-existent email: ${normalizedEmail} from IP: ${clientIP}`);
+        
         // Don't reveal if email exists or not (security best practice)
         return res.status(200).json({
           success: true,
@@ -183,20 +226,30 @@ export class AuthController {
         });
       }
 
+      console.log(`✅ [FORGOT_PASSWORD] User found for email: ${normalizedEmail}`);
+
       // Generate verification code
       const code = await VerificationCode.create(normalizedEmail);
+      console.log(`🔐 [FORGOT_PASSWORD] Verification code generated: ${code}`);
 
-      // TODO: Send email with code
-      console.log(`Reset code for ${normalizedEmail}: ${code}`);
+      // Send email with code
+      const emailSent = await sendVerificationCodeEmail(normalizedEmail, code);
 
+      if (!emailSent) {
+        console.error(`❌ [FORGOT_PASSWORD] Failed to send email to: ${normalizedEmail}`);
+        return res.status(500).json({
+          success: false,
+          message: 'Failed to send verification email',
+        });
+      }
+
+      console.log(`📧 [FORGOT_PASSWORD] Success - Code sent to: ${normalizedEmail}`);
       return res.status(200).json({
         success: true,
-        message: 'Reset code sent to your email',
-        // For development only - remove in production
-        data: { code },
+        message: 'Verification code sent to your email',
       });
     } catch (error) {
-      console.error('Forgot password error:', error);
+      console.error('❌ [FORGOT_PASSWORD] Error:', error);
       return res.status(500).json({
         success: false,
         message: 'Failed to process forgot password request',
@@ -271,6 +324,51 @@ export class AuthController {
       return res.status(500).json({
         success: false,
         message: 'Failed to reset password',
+      });
+    }
+  }
+
+  static async verifyCode(req: AuthRequest, res: Response) {
+    try {
+      const { email, code } = req.body;
+
+      // Validate and normalize email
+      const emailValidation = validateAndNormalizeEmail(email);
+      if (!emailValidation.isValid) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid email format',
+        });
+      }
+
+      const normalizedEmail = emailValidation.normalizedEmail;
+
+      // Validation
+      if (!code) {
+        return res.status(400).json({
+          success: false,
+          message: 'Verification code is required',
+        });
+      }
+
+      // Check if code is valid (don't consume it yet)
+      const isValid = await VerificationCode.check(normalizedEmail, code);
+      if (!isValid) {
+        return res.status(401).json({
+          success: false,
+          message: 'Invalid or expired verification code',
+        });
+      }
+
+      return res.status(200).json({
+        success: true,
+        message: 'Verification code is valid',
+      });
+    } catch (error) {
+      console.error('Verify code error:', error);
+      return res.status(500).json({
+        success: false,
+        message: 'Failed to verify code',
       });
     }
   }

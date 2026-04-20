@@ -128,6 +128,56 @@ export class VerificationCode {
   }
 }
 
+// Failed password reset attempts tracking for security
+export class FailedResetAttempt {
+  static async record(email: string, ipAddress: string): Promise<void> {
+    const db = getDatabase();
+    const attemptsCollection = db.collection('failed_reset_attempts');
+
+    await attemptsCollection.insertOne({
+      email,
+      ip_address: ipAddress,
+      attempted_at: new Date(),
+    });
+  }
+
+  static async getRecentAttempts(email: string, minutes: number = 60): Promise<number> {
+    const db = getDatabase();
+    const attemptsCollection = db.collection('failed_reset_attempts');
+    const timeThreshold = new Date(Date.now() - minutes * 60 * 1000);
+
+    const count = await attemptsCollection.countDocuments({
+      email,
+      attempted_at: { $gt: timeThreshold },
+    });
+
+    return count;
+  }
+
+  static async getAttemptsByIP(ipAddress: string, minutes: number = 60): Promise<number> {
+    const db = getDatabase();
+    const attemptsCollection = db.collection('failed_reset_attempts');
+    const timeThreshold = new Date(Date.now() - minutes * 60 * 1000);
+
+    const count = await attemptsCollection.countDocuments({
+      ip_address: ipAddress,
+      attempted_at: { $gt: timeThreshold },
+    });
+
+    return count;
+  }
+
+  static async cleanup(): Promise<void> {
+    const db = getDatabase();
+    const attemptsCollection = db.collection('failed_reset_attempts');
+    const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+
+    await attemptsCollection.deleteMany({
+      attempted_at: { $lt: oneDayAgo },
+    });
+  }
+}
+
 function generateRandomCode(): string {
   return crypto.randomInt(100000, 1000000).toString();
 }

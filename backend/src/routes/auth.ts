@@ -8,6 +8,7 @@ const router = Router();
 router.post('/signup', AuthController.signup);
 router.post('/login', AuthController.login);
 router.post('/forgot-password', AuthController.forgotPassword);
+router.post('/verify-code', AuthController.verifyCode);
 router.post('/reset-password', AuthController.resetPassword);
 
 // Protected routes
