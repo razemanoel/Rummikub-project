@@ -1,11 +1,20 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, UploadFile, File
 from backend.models import (
     BoardValidationRequest,
     BoardValidationResponse,
     GameState,
-    GameStateValidationResponse
+    GameStateValidationResponse,
+    DetectBoardResponse
 )
 from backend.logic import validate_board, validate_game_state
+from backend.vision import (
+    load_image_from_upload,
+    detect_tile_regions,
+    sort_regions_left_to_right,
+    remove_contained_regions
+)
+from backend.models import ClassifyFreeTilesResponse
+from backend.vision import classify_free_tiles
 
 app = FastAPI(title="Rummikub Backend", version="0.2.0")
 
@@ -48,4 +57,34 @@ def validate_game_state_endpoint(data: GameState):
         status="success",
         message="Game state is valid",
         invalid_sets=[]
+    )
+
+
+@app.post("/detect-board", response_model=DetectBoardResponse)
+async def detect_board(file: UploadFile = File(...)):
+    image = await load_image_from_upload(file)
+    regions = detect_tile_regions(image)
+    regions = remove_contained_regions(regions)
+    regions = sort_regions_left_to_right(regions)
+
+    return DetectBoardResponse(
+        status="success",
+        tile_count=len(regions),
+        regions=regions
+    )
+
+@app.post("/classify-free-tiles", response_model=ClassifyFreeTilesResponse)
+async def classify_free_tiles_endpoint(file: UploadFile = File(...)):
+    image = await load_image_from_upload(file)
+
+    regions = detect_tile_regions(image)
+    regions = remove_contained_regions(regions)
+    regions = sort_regions_left_to_right(regions)
+
+    tiles = classify_free_tiles(image, regions)
+
+    return ClassifyFreeTilesResponse(
+        status="success",
+        tile_count=len(tiles),
+        tiles=tiles
     )

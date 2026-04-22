@@ -57,3 +57,30 @@ class GameStateValidationResponse(BaseModel):
     status: str
     message: str
     invalid_sets: List[InvalidSetInfo]
+
+class TileRegion(BaseModel):
+    x: int
+    y: int
+    width: int
+    height: int
+
+
+class DetectBoardResponse(BaseModel):
+    status: str
+    tile_count: int
+    regions: List[TileRegion]
+
+
+class FreeTileDetection(BaseModel):
+    x: int
+    y: int
+    width: int
+    height: int
+    color: Optional[str] = None
+    value: Optional[int] = None
+
+
+class ClassifyFreeTilesResponse(BaseModel):
+    status: str
+    tile_count: int
+    tiles: List[FreeTileDetection]
