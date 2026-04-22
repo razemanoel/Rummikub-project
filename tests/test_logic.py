@@ -1,5 +1,7 @@
 from backend.logic import validate_set, validate_board, validate_game_state
 from backend.models import Tile, TileColor, TileSet, GameState
+from backend.models import TileRegion
+from backend.vision import sort_regions_left_to_right
 
 
 def test_valid_group():
@@ -164,3 +166,17 @@ def test_validate_game_state_invalid_board():
     assert not is_valid
     assert len(invalid_sets) == 1
     assert invalid_sets[0].index == 0
+
+
+def test_sort_regions_left_to_right():
+    regions = [
+        TileRegion(x=200, y=50, width=40, height=70),
+        TileRegion(x=50, y=55, width=40, height=70),
+        TileRegion(x=120, y=60, width=40, height=70),
+    ]
+
+    sorted_regions = sort_regions_left_to_right(regions)
+
+    assert sorted_regions[0].x == 50
+    assert sorted_regions[1].x == 120
+    assert sorted_regions[2].x == 200
