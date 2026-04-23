@@ -1,8 +1,8 @@
-import { Redirect } from 'expo-router';
+import { Stack, Redirect } from 'expo-router';
 import { useAuth } from '@/context/AuthContext';
 import { View, ActivityIndicator } from 'react-native';
 
-export default function RootIndex() {
+export default function MainLayout() {
   const { isAuthenticated, isLoading } = useAuth();
 
   if (isLoading) {
@@ -13,9 +13,9 @@ export default function RootIndex() {
     );
   }
 
-  if (isAuthenticated) {
-    return <Redirect href="/(main)/(tabs)" />;
+  if (!isAuthenticated) {
+    return <Redirect href="/(auth)/login" />;
   }
 
-  return <Redirect href="/(auth)/login" />;
+  return <Stack screenOptions={{ headerShown: false }} />;
 }

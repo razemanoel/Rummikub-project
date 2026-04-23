@@ -12,7 +12,7 @@ import {
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
-import { api } from '../services/api';
+import { apiService } from '@/services/api';
 
 export default function ForgotPasswordScreen() {
   const router = useRouter();
@@ -42,7 +42,7 @@ export default function ForgotPasswordScreen() {
     setLoading(true);
     setErrorMessage('');
     try {
-      const response = await api.post('/auth/forgot-password', {
+      const response = await apiService.forgotPassword({
         email: email.trim().toLowerCase(),
       });
 
@@ -78,9 +78,7 @@ export default function ForgotPasswordScreen() {
     setLoading(true);
     setErrorMessage('');
     try {
-      // Note: Backend just validates the code exists
-      // The actual consumption happens during password reset
-      const response = await api.post('/auth/verify-code', {
+      const response = await apiService.verifyResetCode({
         email: email.trim().toLowerCase(),
         code: verificationCode.trim(),
       });
@@ -127,7 +125,7 @@ export default function ForgotPasswordScreen() {
     setLoading(true);
     setErrorMessage('');
     try {
-      const response = await api.post('/auth/reset-password', {
+      const response = await apiService.resetPassword({
         email: email.trim().toLowerCase(),
         code: verificationCode.trim(),
         newPassword: newPassword.trim(),
@@ -136,9 +134,9 @@ export default function ForgotPasswordScreen() {
 
       if (response.data?.success) {
         Alert.alert('Success', 'Your password has been reset. Please login with your new password.');
-        router.replace('/login');
+        router.replace('/(auth)/login');
       } else {
-        const errorMsg = error.response?.data?.message || 'Failed to reset password';
+        const errorMsg = response.data?.message || 'Failed to reset password';
         setErrorMessage(errorMsg);
         Alert.alert('Error', errorMsg);
       }
@@ -240,7 +238,7 @@ export default function ForgotPasswordScreen() {
                   Enter the 6-digit code sent to {email}
                 </Text>
                 <View style={styles.inputContainer}>
-                  <Ionicons name="lock" size={20} color="#9db4ff" style={styles.inputIcon} />
+                  <Ionicons name="lock-closed" size={20} color="#9db4ff" style={styles.inputIcon} />
                   <TextInput
                     style={styles.input}
                     placeholder="000000"
@@ -360,7 +358,7 @@ export default function ForgotPasswordScreen() {
               {step === 1 ? "Remember your password? " : "Back to login? "}
             </Text>
             <TouchableOpacity
-              onPress={step > 1 ? handleBack : () => router.replace('/login')}
+              onPress={step > 1 ? handleBack : () => router.replace('/(auth)/login')}
               disabled={loading}
             >
               <Text style={styles.footerLink}>{step > 1 ? 'Go Back' : 'Login'}</Text>

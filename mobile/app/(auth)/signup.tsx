@@ -14,22 +14,23 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { useAuth } from '@/context/AuthContext';
 
-export default function LoginScreen() {
+export default function SignUpScreen() {
   const router = useRouter();
-  const { login, isLoading } = useAuth();
+  const { signup, isLoading } = useAuth();
   
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
-  const [rememberMe, setRememberMe] = useState(true);
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [localLoading, setLocalLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
 
-  const handleLogin = async () => {
-    // Reset error message
-    setErrorMessage('');
+  const loading = isLoading || localLoading;
 
-    // Validate inputs
+  const handleSignUp = async () => {
+    setErrorMessage('');
+    
     if (!email.trim()) {
       const msg = 'Email is required';
       setErrorMessage(msg);
@@ -44,7 +45,13 @@ export default function LoginScreen() {
       return;
     }
 
-    // Basic email validation
+    if (!confirmPassword.trim()) {
+      const msg = 'Confirm password is required';
+      setErrorMessage(msg);
+      Alert.alert('Missing Field', msg);
+      return;
+    }
+
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email)) {
       const msg = 'Please enter a valid email address';
@@ -60,40 +67,37 @@ export default function LoginScreen() {
       return;
     }
 
+    if (password !== confirmPassword) {
+      const msg = 'Passwords do not match';
+      setErrorMessage(msg);
+      Alert.alert('Password Mismatch', msg);
+      return;
+    }
+
     setLocalLoading(true);
     try {
-      await login(email, password);
-      // Reset form
+      await signup(email, password, confirmPassword);
       setEmail('');
       setPassword('');
-      // Navigate to home/tabs screen
-      router.replace('/(tabs)');
+      setConfirmPassword('');
+      router.replace('/(main)/(tabs)');
     } catch (error: any) {
-      const errorMsg = error.message || 'Login failed. Please try again.';
+      const errorMsg = error.message || 'Sign up failed. Please try again.';
       setErrorMessage(errorMsg);
       
-      // Show specific error messages
-      if (errorMsg.toLowerCase().includes('not found') || errorMsg.toLowerCase().includes('does not exist')) {
-        Alert.alert('User Not Found', 'No account found with this email address. Please sign up first.');
-      } else if (errorMsg.toLowerCase().includes('invalid') || errorMsg.toLowerCase().includes('incorrect')) {
-        Alert.alert('Invalid Credentials', 'Email or password is incorrect. Please try again.');
+      if (errorMsg.toLowerCase().includes('already')) {
+        Alert.alert('Email Exists', 'This email is already registered. Please try logging in.');
       } else {
-        Alert.alert('Login Error', errorMsg);
+        Alert.alert('Sign Up Error', errorMsg);
       }
     } finally {
       setLocalLoading(false);
     }
   };
 
-  const handleSignUp = () => {
-    router.push('/signup');
+  const handleBackToLogin = () => {
+    router.back();
   };
-
-  const handleForgotPassword = () => {
-    router.push('/forgotpassword');
-  };
-
-  const loading = isLoading || localLoading;
 
   return (
     <LinearGradient
@@ -104,15 +108,15 @@ export default function LoginScreen() {
         <View style={styles.container}>
           {/* Logo */}
           <View style={styles.logoRow}>
-            <Ionicons name="lock-closed" size={22} color="#f59e0b" />
+            <Ionicons name="person-add" size={22} color="#f59e0b" />
             <Text style={styles.logoText}>rummikub solver</Text>
           </View>
 
           {/* Card */}
           <View style={styles.card}>
-            <Text style={styles.title}>Login</Text>
+            <Text style={styles.title}>Create Account</Text>
             <Text style={styles.subtitle}>
-              Enter your email and password to continue
+              Join the game and start playing
             </Text>
 
             {/* Error Message */}
@@ -162,22 +166,35 @@ export default function LoginScreen() {
               </TouchableOpacity>
             </View>
 
-            {/* Remember Me */}
-            <TouchableOpacity
-              style={styles.rememberRow}
-              onPress={() => setRememberMe(!rememberMe)}
-              disabled={loading}
-            >
-              <View style={[styles.checkbox, rememberMe && styles.checkboxActive]}>
-                {rememberMe && <Ionicons name="checkmark" size={14} color="#fff" />}
-              </View>
-              <Text style={styles.rememberText}>Remember Me</Text>
-            </TouchableOpacity>
+            {/* Confirm Password Input */}
+            <View style={styles.inputContainer}>
+              <MaterialIcons name="lock" size={20} color="#9db4ff" style={styles.inputIcon} />
+              <TextInput
+                style={styles.input}
+                placeholder="Confirm Password"
+                placeholderTextColor="#9ca3af"
+                value={confirmPassword}
+                onChangeText={setConfirmPassword}
+                secureTextEntry={!showConfirmPassword}
+                editable={!loading}
+              />
+              <TouchableOpacity
+                onPress={() => setShowConfirmPassword(!showConfirmPassword)}
+                disabled={loading}
+                style={styles.eyeButton}
+              >
+                <Ionicons
+                  name={showConfirmPassword ? 'eye' : 'eye-off'}
+                  size={20}
+                  color="#9db4ff"
+                />
+              </TouchableOpacity>
+            </View>
 
-            {/* Login Button */}
+            {/* Sign Up Button */}
             <TouchableOpacity
-              style={[styles.loginButton, loading && styles.loginButtonDisabled]}
-              onPress={handleLogin}
+              style={[styles.signUpButton, loading && styles.signUpButtonDisabled]}
+              onPress={handleSignUp}
               disabled={loading}
             >
               <LinearGradient
@@ -189,23 +206,18 @@ export default function LoginScreen() {
                 {loading ? (
                   <ActivityIndicator color="#fff" size="large" />
                 ) : (
-                  <Text style={styles.loginButtonText}>LOGIN</Text>
+                  <Text style={styles.signUpButtonText}>CREATE ACCOUNT</Text>
                 )}
               </LinearGradient>
             </TouchableOpacity>
 
-            {/* Forgot Password */}
-            <TouchableOpacity onPress={handleForgotPassword} disabled={loading}>
-              <Text style={styles.forgotText}>Forgot Password?</Text>
-            </TouchableOpacity>
-          </View>
-
-          {/* Sign Up Link */}
-          <View style={styles.signupRow}>
-            <Text style={styles.signupText}>Don't have an account? </Text>
-            <TouchableOpacity onPress={handleSignUp} disabled={loading}>
-              <Text style={styles.signupLink}>Sign Up</Text>
-            </TouchableOpacity>
+            {/* Login Link */}
+            <View style={styles.loginRow}>
+              <Text style={styles.loginText}>Already have an account? </Text>
+              <TouchableOpacity onPress={handleBackToLogin} disabled={loading}>
+                <Text style={styles.loginLink}>Login</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       </SafeAreaView>
@@ -282,32 +294,7 @@ const styles = StyleSheet.create({
   eyeButton: {
     padding: 8,
   },
-  rememberRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 6,
-    marginBottom: 20,
-  },
-  checkbox: {
-    width: 22,
-    height: 22,
-    borderRadius: 6,
-    borderWidth: 1,
-    borderColor: '#7c8db5',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 10,
-    backgroundColor: 'transparent',
-  },
-  checkboxActive: {
-    backgroundColor: '#4f8dfd',
-    borderColor: '#4f8dfd',
-  },
-  rememberText: {
-    color: '#d1d5db',
-    fontSize: 16,
-  },
-  loginButton: {
+  signUpButton: {
     borderRadius: 14,
     overflow: 'hidden',
     marginBottom: 20,
@@ -318,7 +305,7 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 6 },
     elevation: 6,
   },
-  loginButtonDisabled: {
+  signUpButtonDisabled: {
     opacity: 0.6,
   },
   buttonGradient: {
@@ -326,27 +313,22 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  loginButtonText: {
+  signUpButtonText: {
     color: '#ffffff',
     fontSize: 22,
     fontWeight: '700',
     letterSpacing: 1,
   },
-  forgotText: {
-    color: '#9db4ff',
-    textAlign: 'center',
-    fontSize: 17,
-  },
-  signupRow: {
+  loginRow: {
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
   },
-  signupText: {
+  loginText: {
     color: '#d1d5db',
     fontSize: 16,
   },
-  signupLink: {
+  loginLink: {
     color: '#9db4ff',
     fontSize: 16,
     fontWeight: '600',
@@ -366,4 +348,3 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
 });
-

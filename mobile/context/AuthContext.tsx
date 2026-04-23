@@ -84,9 +84,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       if (response.success && response.data) {
         setUser(response.data);
+      } else {
+        await apiService.clearToken();
+        setToken(null);
+        setUser(null);
       }
     } catch (error) {
       console.error('Failed to fetch profile:', error);
+      await apiService.clearToken();
+      setToken(null);
+      setUser(null);
     }
   };
 
