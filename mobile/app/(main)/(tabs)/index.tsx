@@ -9,6 +9,7 @@ import {
   Animated,
   Alert,
   Platform,
+  ActivityIndicator,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
@@ -16,6 +17,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import UploadCard from '@/components/upload-card';
 import { useAuth } from '@/context/AuthContext';
+import { apiService } from '@/services/api';
 
 export default function HomeScreen() {
   const router = useRouter();
@@ -25,6 +27,8 @@ export default function HomeScreen() {
   const [analyzeButtonScale] = useState(new Animated.Value(1));
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [showPickerForType, setShowPickerForType] = useState<'myBoard' | 'shared' | null>(null);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [analysisResults, setAnalysisResults] = useState<any | null>(null);
 
   const handleUploadMyBoard = () => {
     if (Platform.OS === 'web') {
@@ -147,7 +151,7 @@ export default function HomeScreen() {
     }
   };
 
-  const handleAnalyzePhotos = () => {
+  const handleAnalyzePhotos = async () => {
     const totalImages = myBoardImages.length + sharedBoardImages.length;
     if (totalImages === 0) {
       Alert.alert(
@@ -157,11 +161,39 @@ export default function HomeScreen() {
       return;
     }
 
-    Alert.alert(
-      'Analyzing',
-      `Starting analysis for ${totalImages} photo(s)...`
-    );
-    // Future implementation for analysis
+    try {
+      setIsAnalyzing(true);
+      setAnalysisResults(null);
+
+      console.log(`Sending ${totalImages} image(s) to API for analysis...`);
+      
+      // Send images to API for board analysis
+      const result = await apiService.analyzeBoards(
+        myBoardImages[0],
+        sharedBoardImages[0]
+      );
+
+      setAnalysisResults(result);
+
+      if (result.success) {
+        const myBoardTiles = result.data?.myBoardDetections?.length || 0;
+        const sharedBoardTiles = result.data?.sharedBoardDetections?.length || 0;
+        Alert.alert(
+          'Analysis Complete',
+          `${result.message}\n\nMy Board: ${myBoardTiles} tiles\nShared Board: ${sharedBoardTiles} tiles`
+        );
+      } else {
+        Alert.alert('Analysis Failed', result.message);
+      }
+    } catch (error: any) {
+      console.error('Analysis error:', error);
+      Alert.alert(
+        'Error',
+        error.message || 'Failed to analyze photos. Please try again.'
+      );
+    } finally {
+      setIsAnalyzing(false);
+    }
   };
 
   const handleAnalyzePressIn = () => {
@@ -331,11 +363,11 @@ export default function HomeScreen() {
             onPress={handleAnalyzePhotos}
             onPressIn={handleAnalyzePressIn}
             onPressOut={handleAnalyzePressOut}
-            disabled={isDisabled}
+            disabled={isDisabled || isAnalyzing}
             style={({ pressed }) => [
               styles.analyzeButton,
-              pressed && !isDisabled && styles.analyzeButtonPressed,
-              isDisabled && styles.analyzeButtonDisabled,
+              pressed && !isDisabled && !isAnalyzing && styles.analyzeButtonPressed,
+              (isDisabled || isAnalyzing) && styles.analyzeButtonDisabled,
             ]}
           >
             <Animated.View
@@ -348,7 +380,7 @@ export default function HomeScreen() {
             >
               <LinearGradient
                 colors={
-                  isDisabled
+                  isDisabled || isAnalyzing
                     ? ['#374151', '#1f2937']
                     : ['#4f8dfd', '#73a9ff']
                 }
@@ -356,23 +388,118 @@ export default function HomeScreen() {
                 end={{ x: 1, y: 0 }}
                 style={styles.analyzeGradient}
               >
-                <Ionicons
-                  name="flash"
-                  size={20}
-                  color={isDisabled ? '#9ca3af' : '#ffffff'}
-                  style={styles.analyzeIcon}
-                />
+                {isAnalyzing ? (
+                  <ActivityIndicator size="small" color="#ffffff" />
+                ) : (
+                  <Ionicons
+                    name="flash"
+                    size={20}
+                    color={isDisabled ? '#9ca3af' : '#ffffff'}
+                    style={styles.analyzeIcon}
+                  />
+                )}
                 <Text
                   style={[
                     styles.analyzeText,
-                    isDisabled && styles.analyzeTextDisabled,
+                    (isDisabled || isAnalyzing) && styles.analyzeTextDisabled,
                   ]}
                 >
-                  Analyze Photos
+                  {isAnalyzing ? 'Analyzing...' : 'Analyze Photos'}
                 </Text>
               </LinearGradient>
             </Animated.View>
           </Pressable>
+
+          {/* Analysis Results */}
+          {analysisResults && analysisResults.success && (
+            <>
+              {/* My Board Results */}
+              {analysisResults.data?.myBoardDetections && analysisResults.data.myBoardDetections.length > 0 && (
+                <View style={styles.resultsContainer}>
+                  <View style={styles.resultsHeader}>
+                    <Ionicons name="checkmark-circle" size={24} color="#10b981" />
+                    <Text style={styles.resultsTitle}>My Board - {analysisResults.data.myBoardDetections.length} Tiles</Text>
+                  </View>
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    style={styles.tilesScroll}
+                  >
+                    {analysisResults.data.myBoardDetections.map((tile: any, idx: number) => (
+                      <View key={`myboard-${idx}`} style={styles.tileResult}>
+                        <View
+                          style={[
+                            styles.tileNumber,
+                            {
+                              backgroundColor:
+                                tile.tile_color === 'red'
+                                  ? '#ef4444'
+                                  : tile.tile_color === 'blue'
+                                  ? '#3b82f6'
+                                  : tile.tile_color === 'yellow'
+                                  ? '#fbbf24'
+                                  : '#000000',
+                            },
+                          ]}
+                        >
+                          <Text style={styles.tileValue}>
+                            {tile.tile_number || '?'}
+                          </Text>
+                        </View>
+                        <Text style={styles.tileColor}>{tile.tile_color}</Text>
+                        <Text style={styles.tileConfidence}>
+                          {(tile.confidence * 100).toFixed(0)}%
+                        </Text>
+                      </View>
+                    ))}
+                  </ScrollView>
+                </View>
+              )}
+
+              {/* Shared Board Results */}
+              {analysisResults.data?.sharedBoardDetections && analysisResults.data.sharedBoardDetections.length > 0 && (
+                <View style={styles.resultsContainer}>
+                  <View style={styles.resultsHeader}>
+                    <Ionicons name="checkmark-circle" size={24} color="#10b981" />
+                    <Text style={styles.resultsTitle}>Shared Board - {analysisResults.data.sharedBoardDetections.length} Tiles</Text>
+                  </View>
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    style={styles.tilesScroll}
+                  >
+                    {analysisResults.data.sharedBoardDetections.map((tile: any, idx: number) => (
+                      <View key={`shared-${idx}`} style={styles.tileResult}>
+                        <View
+                          style={[
+                            styles.tileNumber,
+                            {
+                              backgroundColor:
+                                tile.tile_color === 'red'
+                                  ? '#ef4444'
+                                  : tile.tile_color === 'blue'
+                                  ? '#3b82f6'
+                                  : tile.tile_color === 'yellow'
+                                  ? '#fbbf24'
+                                  : '#000000',
+                            },
+                          ]}
+                        >
+                          <Text style={styles.tileValue}>
+                            {tile.tile_number || '?'}
+                          </Text>
+                        </View>
+                        <Text style={styles.tileColor}>{tile.tile_color}</Text>
+                        <Text style={styles.tileConfidence}>
+                          {(tile.confidence * 100).toFixed(0)}%
+                        </Text>
+                      </View>
+                    ))}
+                  </ScrollView>
+                </View>
+              )}
+            </>
+          )}
 
           {/* Info Section */}
           <View style={styles.infoSection}>
@@ -583,5 +710,57 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     color: '#9ca3af',
     textAlign: 'center',
+  },
+  resultsContainer: {
+    backgroundColor: 'rgba(16, 185, 129, 0.1)',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 24,
+    borderWidth: 1,
+    borderColor: 'rgba(16, 185, 129, 0.3)',
+  },
+  resultsHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  resultsTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#10b981',
+    marginLeft: 8,
+  },
+  tilesScroll: {
+    flexDirection: 'row',
+  },
+  tileResult: {
+    alignItems: 'center',
+    marginRight: 16,
+    paddingVertical: 12,
+  },
+  tileNumber: {
+    width: 56,
+    height: 56,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  tileValue: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: '#ffffff',
+  },
+  tileColor: {
+    fontSize: 12,
+    color: '#86efac',
+    fontWeight: '500',
+    marginBottom: 4,
+    textTransform: 'capitalize',
+  },
+  tileConfidence: {
+    fontSize: 11,
+    color: '#a1f3d1',
+    fontWeight: '400',
   },
 });
