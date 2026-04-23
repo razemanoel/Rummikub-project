@@ -9,13 +9,18 @@ import {
   Animated,
   Alert,
 } from 'react-native';
+import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import UploadCard from '@/components/upload-card';
+import { useAuth } from '@/context/AuthContext';
 
 export default function HomeScreen() {
+  const router = useRouter();
+  const { logout } = useAuth();
   const [selectedImages, setSelectedImages] = useState<number>(0);
   const [analyzeButtonScale] = useState(new Animated.Value(1));
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   const handleUploadMyBoard = () => {
     Alert.alert(
@@ -63,6 +68,26 @@ export default function HomeScreen() {
     }).start();
   };
 
+  const handleHistory = () => {
+    router.push('/(main)/history');
+  };
+
+  const handleSettings = () => {
+    router.push('/(main)/settings');
+  };
+
+  const handleLogout = async () => {
+    try {
+      setIsLoggingOut(true);
+      await logout();
+      await new Promise(resolve => setTimeout(resolve, 300));
+      router.replace('/(auth)/login');
+    } catch (error) {
+      console.error('Logout error:', error);
+      setIsLoggingOut(false);
+    }
+  };
+
   const isDisabled = selectedImages === 0;
 
   return (
@@ -78,8 +103,41 @@ export default function HomeScreen() {
         >
           {/* Header */}
           <View style={styles.header}>
-            <Ionicons name="key" size={24} color="#f59e0b" />
-            <Text style={styles.headerTitle}>rummikub solver</Text>
+            <View style={styles.headerLeft}>
+              <Ionicons name="key" size={24} color="#f59e0b" />
+              <Text style={styles.headerTitle}>rummikub solver</Text>
+            </View>
+            <View style={styles.headerActions}>
+              <Pressable
+                onPress={handleHistory}
+                style={({ pressed }) => [
+                  styles.actionButton,
+                  pressed && styles.actionButtonPressed,
+                ]}
+              >
+                <Ionicons name="time" size={20} color="#9db4ff" />
+              </Pressable>
+              <Pressable
+                onPress={handleSettings}
+                style={({ pressed }) => [
+                  styles.actionButton,
+                  pressed && styles.actionButtonPressed,
+                ]}
+              >
+                <Ionicons name="settings" size={20} color="#9db4ff" />
+              </Pressable>
+              <Pressable
+                onPress={handleLogout}
+                disabled={isLoggingOut}
+                style={({ pressed }) => [
+                  styles.actionButton,
+                  pressed && !isLoggingOut && styles.actionButtonPressed,
+                  isLoggingOut && styles.actionButtonDisabled,
+                ]}
+              >
+                <Ionicons name="log-out" size={20} color={isLoggingOut ? '#9ca3af' : '#ef4444'} />
+              </Pressable>
+            </View>
           </View>
 
           {/* Main Title */}
@@ -197,8 +255,13 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     marginTop: 16,
     marginBottom: 32,
+  },
+  headerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   headerTitle: {
     fontSize: 18,
@@ -206,6 +269,22 @@ const styles = StyleSheet.create({
     color: '#f59e0b',
     marginLeft: 8,
     letterSpacing: 0.5,
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  actionButton: {
+    padding: 8,
+    borderRadius: 8,
+    backgroundColor: 'rgba(79, 141, 253, 0.1)',
+  },
+  actionButtonPressed: {
+    backgroundColor: 'rgba(79, 141, 253, 0.2)',
+  },
+  actionButtonDisabled: {
+    opacity: 0.5,
   },
   titleSection: {
     marginBottom: 12,

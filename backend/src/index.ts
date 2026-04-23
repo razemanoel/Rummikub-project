@@ -13,10 +13,14 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 // Middleware
-app.use(cors({
-  origin: process.env.CORS_ORIGIN?.split(',').map(o => o.trim()) || true,
-  credentials: true,
-}));
+const corsOrigin = process.env.CORS_ORIGIN || '*';
+const corsOptions = corsOrigin === '*' 
+  ? { origin: true, credentials: true }
+  : { 
+      origin: corsOrigin.split(',').map(o => o.trim()),
+      credentials: true,
+    };
+app.use(cors(corsOptions));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 

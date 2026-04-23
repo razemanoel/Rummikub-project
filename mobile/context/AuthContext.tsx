@@ -99,11 +99,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = async () => {
     try {
+      setIsLoading(true);
       await apiService.clearToken();
       setToken(null);
       setUser(null);
+      setIsLoading(false);
     } catch (error) {
       console.error('Failed to logout:', error);
+      // Even on error, clear the local state
+      setToken(null);
+      setUser(null);
+      setIsLoading(false);
     }
   };
 
