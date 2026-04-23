@@ -1,7 +1,7 @@
 {
-  "name": "rummikub-backend",
+  "name": "rummikub-api",
   "version": "1.0.0",
-  "description": "Backend API for Rummikub mobile app",
+  "description": "Express TypeScript API - Authentication, User Management, and Game Orchestration",
   "main": "src/index.ts",
   "scripts": {
     "start": "node dist/index.js",
@@ -9,7 +9,7 @@
     "build": "tsc",
     "watch": "tsc --watch"
   },
-  "keywords": [],
+  "keywords": ["rummikub", "api", "express", "typescript", "auth"],
   "author": "",
   "license": "ISC",
   "dependencies": {

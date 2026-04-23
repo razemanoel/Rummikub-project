@@ -8,8 +8,10 @@ import {
   SafeAreaView,
   Animated,
   Alert,
+  Platform,
 } from 'react-native';
 import { useRouter } from 'expo-router';
+import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import UploadCard from '@/components/upload-card';
@@ -18,28 +20,136 @@ import { useAuth } from '@/context/AuthContext';
 export default function HomeScreen() {
   const router = useRouter();
   const { logout } = useAuth();
-  const [selectedImages, setSelectedImages] = useState<number>(0);
+  const [myBoardImages, setMyBoardImages] = useState<string[]>([]);
+  const [sharedBoardImages, setSharedBoardImages] = useState<string[]>([]);
   const [analyzeButtonScale] = useState(new Animated.Value(1));
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [showPickerForType, setShowPickerForType] = useState<'myBoard' | 'shared' | null>(null);
 
   const handleUploadMyBoard = () => {
-    Alert.alert(
-      'Upload Photo',
-      'Open camera or gallery to select a photo from My Board'
-    );
-    // Future implementation for image upload
+    if (Platform.OS === 'web') {
+      setShowPickerForType('myBoard');
+    } else {
+      showImagePickerOptions((uri) => {
+        setMyBoardImages([...myBoardImages, uri]);
+      });
+    }
   };
 
   const handleUploadSharedBoard = () => {
-    Alert.alert(
-      'Upload Photo',
-      'Open camera or gallery to select a photo from Shared Board'
-    );
-    // Future implementation for image upload
+    if (Platform.OS === 'web') {
+      setShowPickerForType('shared');
+    } else {
+      showImagePickerOptions((uri) => {
+        setSharedBoardImages([...sharedBoardImages, uri]);
+      });
+    }
+  };
+
+  const pickFromGallery = async (type: 'myBoard' | 'shared') => {
+    try {
+      console.log(`Opening gallery for ${type}`);
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [4, 3],
+        quality: 0.8,
+      });
+
+      if (!result.canceled && result.assets.length > 0) {
+        const uri = result.assets[0].uri;
+        console.log(`Image selected: ${uri}`);
+        if (type === 'myBoard') {
+          setMyBoardImages([...myBoardImages, uri]);
+        } else {
+          setSharedBoardImages([...sharedBoardImages, uri]);
+        }
+      }
+      setShowPickerForType(null);
+    } catch (error) {
+      console.error('Gallery error:', error);
+      Alert.alert('Error', 'Failed to open gallery');
+    }
+  };
+
+  const pickFromCamera = async (type: 'myBoard' | 'shared') => {
+    try {
+      console.log(`Opening camera for ${type}`);
+      const result = await ImagePicker.launchCameraAsync({
+        allowsEditing: true,
+        aspect: [4, 3],
+        quality: 0.8,
+      });
+
+      if (!result.canceled && result.assets.length > 0) {
+        const uri = result.assets[0].uri;
+        console.log(`Photo taken: ${uri}`);
+        if (type === 'myBoard') {
+          setMyBoardImages([...myBoardImages, uri]);
+        } else {
+          setSharedBoardImages([...sharedBoardImages, uri]);
+        }
+      }
+      setShowPickerForType(null);
+    } catch (error) {
+      console.error('Camera error:', error);
+      Alert.alert('Error', 'Failed to open camera');
+    }
+  };
+
+  const showImagePickerOptions = async (onImagePicked: (uri: string) => void) => {
+    Alert.alert('Select Photo Source', 'Choose where to get the photo', [
+      {
+        text: 'Camera',
+        onPress: async () => {
+          const permission = await ImagePicker.requestCameraPermissionsAsync();
+          if (permission.granted) {
+            const result = await ImagePicker.launchCameraAsync({
+              allowsEditing: true,
+              aspect: [4, 3],
+              quality: 0.8,
+            });
+            if (!result.canceled) {
+              onImagePicked(result.assets[0].uri);
+            }
+          } else {
+            Alert.alert('Permission Denied', 'Camera access is required to take photos');
+          }
+        },
+      },
+      {
+        text: 'Gallery',
+        onPress: async () => {
+          const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+          if (permission.granted) {
+            const result = await ImagePicker.launchImageLibraryAsync({
+              allowsEditing: true,
+              aspect: [4, 3],
+              quality: 0.8,
+            });
+            if (!result.canceled) {
+              onImagePicked(result.assets[0].uri);
+            }
+          } else {
+            Alert.alert('Permission Denied', 'Gallery access is required to select photos');
+          }
+        },
+      },
+      { text: 'Cancel', onPress: () => {}, style: 'cancel' },
+    ]);
+  };
+
+  const removeImage = (type: 'myBoard' | 'shared', index: number) => {
+    if (type === 'myBoard') {
+      setMyBoardImages(myBoardImages.filter((_, i) => i !== index));
+    } else {
+      setSharedBoardImages(sharedBoardImages.filter((_, i) => i !== index));
+    }
   };
 
   const handleAnalyzePhotos = () => {
-    if (selectedImages === 0) {
+    const totalImages = myBoardImages.length + sharedBoardImages.length;
+    if (totalImages === 0) {
       Alert.alert(
         'No Photos',
         'Please upload at least one photo before analyzing'
@@ -49,7 +159,7 @@ export default function HomeScreen() {
 
     Alert.alert(
       'Analyzing',
-      `Starting analysis for ${selectedImages} photo(s)...`
+      `Starting analysis for ${totalImages} photo(s)...`
     );
     // Future implementation for analysis
   };
@@ -57,14 +167,14 @@ export default function HomeScreen() {
   const handleAnalyzePressIn = () => {
     Animated.spring(analyzeButtonScale, {
       toValue: 0.95,
-      useNativeDriver: true,
+      useNativeDriver: Platform.OS !== 'web',
     }).start();
   };
 
   const handleAnalyzePressOut = () => {
     Animated.spring(analyzeButtonScale, {
       toValue: 1,
-      useNativeDriver: true,
+      useNativeDriver: Platform.OS !== 'web',
     }).start();
   };
 
@@ -88,7 +198,8 @@ export default function HomeScreen() {
     }
   };
 
-  const isDisabled = selectedImages === 0;
+  const isDisabled = myBoardImages.length === 0 && sharedBoardImages.length === 0;
+  const totalImages = myBoardImages.length + sharedBoardImages.length;
 
   return (
     <LinearGradient
@@ -155,20 +266,62 @@ export default function HomeScreen() {
           <View style={styles.cardsContainer}>
             <UploadCard
               title="My Board"
+              images={myBoardImages}
               onPress={handleUploadMyBoard}
+              onRemoveImage={(index) => removeImage('myBoard', index)}
             />
             <UploadCard
               title="Shared Board"
+              images={sharedBoardImages}
               onPress={handleUploadSharedBoard}
+              onRemoveImage={(index) => removeImage('shared', index)}
             />
           </View>
 
+          {/* Web Photo Picker Modal */}
+          {showPickerForType && Platform.OS === 'web' && (
+            <View style={styles.pickerModal}>
+              <View style={styles.pickerContent}>
+                <Text style={styles.pickerTitle}>Select Photo Source</Text>
+                <Pressable
+                  onPress={() => pickFromCamera(showPickerForType)}
+                  style={({ pressed }) => [
+                    styles.pickerButton,
+                    pressed && styles.pickerButtonPressed,
+                  ]}
+                >
+                  <Ionicons name="camera" size={24} color="#4f8dfd" style={{ marginRight: 12 }} />
+                  <Text style={styles.pickerButtonText}>Take Photo</Text>
+                </Pressable>
+                <Pressable
+                  onPress={() => pickFromGallery(showPickerForType)}
+                  style={({ pressed }) => [
+                    styles.pickerButton,
+                    pressed && styles.pickerButtonPressed,
+                  ]}
+                >
+                  <Ionicons name="images" size={24} color="#4f8dfd" style={{ marginRight: 12 }} />
+                  <Text style={styles.pickerButtonText}>Choose from Gallery</Text>
+                </Pressable>
+                <Pressable
+                  onPress={() => setShowPickerForType(null)}
+                  style={({ pressed }) => [
+                    styles.pickerCancelButton,
+                    pressed && styles.pickerCancelButtonPressed,
+                  ]}
+                >
+                  <Text style={styles.pickerCancelButtonText}>Cancel</Text>
+                </Pressable>
+              </View>
+            </View>
+          )}
+
           {/* Selected Images Counter */}
-          {selectedImages > 0 && (
+          {totalImages > 0 && (
             <View style={styles.counterContainer}>
               <Ionicons name="checkmark-circle" size={20} color="#10b981" />
               <Text style={styles.counterText}>
-                {selectedImages} photo{selectedImages !== 1 ? 's' : ''} selected
+                {totalImages} photo{totalImages !== 1 ? 's' : ''} selected
               </Text>
             </View>
           )}
@@ -370,5 +523,65 @@ const styles = StyleSheet.create({
     color: '#cbd5e1',
     marginLeft: 12,
     fontWeight: '500',
+  },
+  pickerModal: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 1000,
+  },
+  pickerContent: {
+    backgroundColor: '#1b2250',
+    borderRadius: 16,
+    padding: 24,
+    minWidth: 300,
+    maxWidth: 400,
+    borderWidth: 1,
+    borderColor: 'rgba(79, 141, 253, 0.3)',
+  },
+  pickerTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#ffffff',
+    marginBottom: 20,
+    textAlign: 'center',
+  },
+  pickerButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(79, 141, 253, 0.1)',
+    borderRadius: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(79, 141, 253, 0.3)',
+  },
+  pickerButtonPressed: {
+    backgroundColor: 'rgba(79, 141, 253, 0.2)',
+  },
+  pickerButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#9db4ff',
+  },
+  pickerCancelButton: {
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    marginTop: 8,
+  },
+  pickerCancelButtonPressed: {
+    opacity: 0.7,
+  },
+  pickerCancelButtonText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#9ca3af',
+    textAlign: 'center',
   },
 });

@@ -5,34 +5,63 @@ import {
   StyleSheet,
   Pressable,
   Animated,
+  ScrollView,
+  Image,
+  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 interface UploadCardProps {
   title: string;
+  images?: string[];
   onPress?: () => void;
+  onRemoveImage?: (index: number) => void;
 }
 
-export default function UploadCard({ title, onPress }: UploadCardProps) {
+export default function UploadCard({ title, images = [], onPress, onRemoveImage }: UploadCardProps) {
   const [scaleAnim] = useState(new Animated.Value(1));
 
   const handlePressIn = () => {
     Animated.spring(scaleAnim, {
       toValue: 0.98,
-      useNativeDriver: true,
+      useNativeDriver: Platform.OS !== 'web',
     }).start();
   };
 
   const handlePressOut = () => {
     Animated.spring(scaleAnim, {
       toValue: 1,
-      useNativeDriver: true,
+      useNativeDriver: Platform.OS !== 'web',
     }).start();
   };
 
   return (
     <View style={styles.container}>
       <Text style={styles.title}>{title}</Text>
+      
+      {/* Display uploaded images */}
+      {images.length > 0 && (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={styles.imagesScrollView}
+          contentContainerStyle={styles.imagesContainer}
+        >
+          {images.map((uri, index) => (
+            <View key={index} style={styles.imageWrapper}>
+              <Image source={{ uri }} style={styles.image} />
+              <Pressable
+                onPress={() => onRemoveImage?.(index)}
+                style={styles.removeButton}
+              >
+                <Ionicons name="close-circle" size={28} color="#ef4444" />
+              </Pressable>
+            </View>
+          ))}
+        </ScrollView>
+      )}
+
+      {/* Upload button */}
       <Pressable
         onPress={onPress}
         onPressIn={handlePressIn}
@@ -56,7 +85,9 @@ export default function UploadCard({ title, onPress }: UploadCardProps) {
             color="#4f8dfd"
             style={styles.icon}
           />
-          <Text style={styles.uploadText}>Snap and Upload Photo</Text>
+          <Text style={styles.uploadText}>
+            {images.length > 0 ? 'Add More Photo' : 'Snap and Upload Photo'}
+          </Text>
         </Animated.View>
       </Pressable>
     </View>
@@ -73,6 +104,29 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     marginBottom: 12,
     marginLeft: 4,
+  },
+  imagesScrollView: {
+    marginBottom: 12,
+  },
+  imagesContainer: {
+    paddingRight: 16,
+  },
+  imageWrapper: {
+    position: 'relative',
+    marginRight: 12,
+  },
+  image: {
+    width: 100,
+    height: 100,
+    borderRadius: 12,
+    backgroundColor: 'rgba(79, 141, 253, 0.1)',
+  },
+  removeButton: {
+    position: 'absolute',
+    top: -8,
+    right: -8,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    borderRadius: 14,
   },
   card: {
     borderRadius: 16,

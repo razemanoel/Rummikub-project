@@ -1,8 +1,7 @@
 import cv2
 import numpy as np
 from fastapi import UploadFile
-from backend.models import TileRegion
-from backend.models import FreeTileDetection
+from models import TileRegion, FreeTileDetection
 from pathlib import Path
 
 async def load_image_from_upload(file: UploadFile):
@@ -148,12 +147,9 @@ def classify_free_tiles(image, regions: list[TileRegion]) -> list[FreeTileDetect
 
         results.append(
             FreeTileDetection(
-                x=region.x,
-                y=region.y,
-                width=region.width,
-                height=region.height,
-                color=color,
-                value=value
+                tile_number=value,
+                tile_color=color,
+                confidence=0.9  # Placeholder confidence
             )
         )
 
@@ -184,7 +180,7 @@ def preprocess_number_image(image):
 
 def load_number_templates():
     """
-    Load all number templates from backend/templates/.
+    Load all number templates from vision/templates/.
     Returns dict like {1: image, 2: image, ...}
     """
     templates = {}

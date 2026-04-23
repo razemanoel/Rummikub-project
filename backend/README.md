@@ -1,11 +1,143 @@
-# Rummikub Backend API
+# Rummikub Backend
 
-Node.js + Express backend for Rummikub mobile app
+Microservices architecture with two independent services:
 
-## Prerequisites
+1. **API Service** (Node.js + TypeScript) - Authentication & Orchestration
+2. **Vision Service** (Python + FastAPI) - Image Processing & Game Logic
 
-- Node.js 16+
-- MongoDB (Local or Cloud)
+## Project Structure
+
+```
+backend/
+├── api/                    # Node.js/TypeScript Service
+│   ├── src/
+│   │   ├── config/        # Database, JWT configuration
+│   │   ├── controllers/   # Route handlers
+│   │   ├── middleware/    # Auth, error handling
+│   │   ├── models/        # Data models (User, etc)
+│   │   ├── routes/        # API endpoints
+│   │   ├── services/      # Business logic (email, etc)
+│   │   └── index.ts       # Server entry point
+│   ├── package.json
+│   ├── tsconfig.json
+│   ├── .env
+│   ├── .gitignore
+│   └── README.md
+│
+├── vision/                 # Python FastAPI Service
+│   ├── main.py           # FastAPI app & endpoints
+│   ├── models.py         # Pydantic data models
+│   ├── vision.py         # Computer vision functions
+│   ├── logic.py          # Game validation logic
+│   ├── __init__.py       # Package initialization
+│   ├── templates/        # Number template images
+│   ├── requirements.txt
+│   └── README.md
+│
+└── README.md             # This file
+```
+
+## Services Overview
+
+### API Service (Port 3000)
+
+**Responsibility**: Authentication, user management, request orchestration
+
+**Key Features**:
+- ✅ User signup/login/password reset
+- ✅ JWT token generation and validation
+- ✅ Email verification
+- ✅ MongoDB integration
+- ✅ CORS-enabled for frontend
+
+**Tech Stack**: Express.js, TypeScript, MongoDB, Nodemailer
+
+**Documentation**: See [api/README.md](api/README.md)
+
+### Vision Service (Port 8000)
+
+**Responsibility**: Image processing, tile detection, game logic
+
+**Key Features**:
+- ✅ Tile detection from board images
+- ✅ Tile classification (number + color)
+- ✅ Game rule validation
+- ✅ Board state analysis
+
+**Tech Stack**: FastAPI, Python, OpenCV, Pydantic
+
+**Documentation**: See [vision/README.md](vision/README.md)
+
+## Getting Started
+
+### Quick Start (Both Services)
+
+#### 1. API Service Setup
+
+```bash
+cd api
+npm install
+cp .env.example .env
+npm run dev  # or npm start for production
+```
+
+Server runs on: `http://localhost:3000`
+
+#### 2. Vision Service Setup
+
+```bash
+cd vision
+pip install -r requirements.txt
+uvicorn main:app --reload  # or uvicorn main:app for production
+```
+
+Service runs on: `http://localhost:8000`
+
+## API Endpoints
+
+### API Service (Express)
+```
+POST   /api/auth/signup           - Create account
+POST   /api/auth/login            - Login
+POST   /api/auth/forgot-password  - Request password reset
+POST   /api/auth/reset-password   - Reset password
+GET    /api/auth/profile          - Get user profile (protected)
+GET    /health                    - Health check
+```
+
+### Vision Service (FastAPI)
+```
+GET    /health                    - Health check
+POST   /validate-board            - Validate sets
+POST   /validate-game-state       - Validate game
+POST   /detect-board              - Detect tiles
+POST   /classify-tiles            - Classify tiles
+```
+
+## Development
+
+### Run Both Services in Development
+
+**Terminal 1 - API Service**:
+```bash
+cd backend/api
+npm run dev
+```
+
+**Terminal 2 - Vision Service**:
+```bash
+cd backend/vision
+uvicorn main:app --reload
+```
+
+## Security
+
+✅ Password hashing (bcryptjs)
+✅ JWT token authentication
+✅ Email verification
+✅ Rate limiting
+✅ CORS configuration
+✅ Input validation
 
 ## Database Setup
 
