@@ -141,6 +141,55 @@ class ApiService {
     }
   }
 
+// Vision APIs
+async analyzeBoards(
+  myBoardUri?: string,
+  sharedBoardUri?: string
+): Promise<ApiResponse> {
+  try {
+    const formData = new FormData();
+
+    const getMimeType = (uri: string) => {
+      if (uri.endsWith('.png')) return 'image/png';
+      if (uri.endsWith('.jpg') || uri.endsWith('.jpeg')) return 'image/jpeg';
+      return 'image/jpeg';
+    };
+
+    // Add myBoard image if provided
+    if (myBoardUri) {
+      formData.append('myBoard', {
+        uri: myBoardUri,
+        type: getMimeType(myBoardUri),
+        name: 'myBoard.jpg',
+      } as any);
+    }
+
+    // Add sharedBoard image if provided
+    if (sharedBoardUri) {
+      formData.append('sharedBoard', {
+        uri: sharedBoardUri,
+        type: getMimeType(sharedBoardUri),
+        name: 'sharedBoard.jpg',
+      } as any);
+    }
+
+    const response = await this.api.post('/vision/analyze', formData);
+
+    return response.data;
+  } catch (error) {
+    return this.handleError(error);
+  }
+}
+
+async checkVisionHealth(): Promise<ApiResponse> {
+  try {
+    const response = await this.api.get('/vision/health');
+    return response.data;
+  } catch (error) {
+    return this.handleError(error);
+  }
+}
+
   // Token management
   private async setToken(token: string) {
     this.token = token;
