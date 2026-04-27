@@ -1,22 +1,24 @@
 from fastapi import FastAPI, UploadFile, File
-from models import (
+from backend.vision.models import (
     BoardValidationRequest,
     BoardValidationResponse,
     GameState,
     GameStateValidationResponse,
     DetectBoardResponse,
-    ClassifyFreeTilesResponse
+    ClassifyFreeTilesResponse,
+    GenerateMovesResponse,
 )
-from logic import validate_board, validate_game_state
-from vision import (
+from backend.vision.logic import validate_board, validate_game_state
+from backend.vision.generator import generate_possible_moves
+from backend.vision.vision import (
     load_image_from_upload,
     detect_tile_regions,
     sort_regions_left_to_right,
     remove_contained_regions,
-    classify_free_tiles
+    classify_free_tiles,
 )
 
-app = FastAPI(title="Rummikub Vision Service", version="0.2.0")
+app = FastAPI(title="Rummikub Vision Service", version="0.3.0")
 
 
 @app.get("/health")
@@ -32,13 +34,13 @@ def validate_board_endpoint(data: BoardValidationRequest):
         return BoardValidationResponse(
             status="error",
             message="Some sets on the board are illegal",
-            invalid_sets=invalid_sets
+            invalid_sets=invalid_sets,
         )
 
     return BoardValidationResponse(
         status="success",
         message="All sets on the board are valid",
-        invalid_sets=[]
+        invalid_sets=[],
     )
 
 
@@ -50,13 +52,25 @@ def validate_game_state_endpoint(data: GameState):
         return GameStateValidationResponse(
             status="error",
             message="Some sets on the board are illegal",
-            invalid_sets=invalid_sets
+            invalid_sets=invalid_sets,
         )
 
     return GameStateValidationResponse(
         status="success",
         message="All sets on the board are valid",
-        invalid_sets=[]
+        invalid_sets=[],
+    )
+
+
+@app.post("/possible-moves", response_model=GenerateMovesResponse)
+def possible_moves_endpoint(data: GameState):
+    moves = generate_possible_moves(data)
+
+    return GenerateMovesResponse(
+        status="success",
+        message=f"Generated {len(moves)} possible moves",
+        move_count=len(moves),
+        moves=moves,
     )
 
 
@@ -72,13 +86,13 @@ async def detect_board_endpoint(file: UploadFile = File(...)):
         return DetectBoardResponse(
             status="success",
             message=f"Detected {len(regions)} tiles",
-            regions=regions
+            regions=regions,
         )
     except Exception as e:
         return DetectBoardResponse(
             status="error",
             message=f"Error detecting board: {str(e)}",
-            regions=None
+            regions=None,
         )
 
 
@@ -96,11 +110,11 @@ async def classify_tiles_endpoint(file: UploadFile = File(...)):
         return ClassifyFreeTilesResponse(
             status="success",
             message=f"Classified {len(tiles)} tiles",
-            tiles=tiles
+            tiles=tiles,
         )
     except Exception as e:
         return ClassifyFreeTilesResponse(
             status="error",
             message=f"Error classifying tiles: {str(e)}",
-            tiles=None
+            tiles=None,
         )

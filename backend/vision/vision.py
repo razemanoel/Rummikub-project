@@ -1,7 +1,7 @@
 import cv2
 import numpy as np
 from fastapi import UploadFile
-from models import TileRegion, FreeTileDetection
+from backend.vision.models import TileRegion, FreeTileDetection
 from pathlib import Path
 
 async def load_image_from_upload(file: UploadFile):
