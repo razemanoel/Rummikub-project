@@ -6,6 +6,7 @@ import { initializeEmailService } from './services/emailService';
 import { errorHandler } from './middleware/auth';
 import authRoutes from './routes/auth';
 import visionRoutes from './routes/visionRoutes';
+import solveRoutes from './routes/solveRoutes';
 
 // Load environment variables
 dotenv.config();
@@ -33,6 +34,7 @@ app.get('/health', (req, res) => {
 // Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/vision', visionRoutes);
+app.use('/api/solve', solveRoutes);
 
 // 404 handler
 app.use((req, res) => {
