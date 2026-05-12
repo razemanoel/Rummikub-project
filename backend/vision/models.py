@@ -82,27 +82,3 @@ class ClassifyFreeTilesResponse(BaseModel):
     status: str
     message: str
     tiles: Optional[List[FreeTileDetection]] = None
-
-
-class MoveAction(BaseModel):
-    type: str
-    description: str
-    source: Optional[str] = None
-    target_set_index: Optional[int] = None
-    tiles: List[Tile]
-
-
-class GeneratedMove(BaseModel):
-    move_type: str
-    tiles_used_count: int
-    tiles_used: List[Tile]
-    actions: List[MoveAction]
-    remaining_rack: List[Tile]
-    new_board: List[TileSet]
-
-
-class GenerateMovesResponse(BaseModel):
-    status: str
-    message: str
-    move_count: int
-    moves: List[GeneratedMove]
