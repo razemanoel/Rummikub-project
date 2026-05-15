@@ -4,7 +4,7 @@ from itertools import combinations
 import time
 
 import pulp
-from backend.vision.explainer import explain_solution
+from backend.vision.explainer import explain_solution, build_structured_steps
 from backend.vision.models import Tile, TileSet, GameState
 
 
@@ -180,6 +180,7 @@ def solve_max_rack_tiles_ilp(game_state: GameState):
     }
 
     result["steps"] = explain_solution(game_state, result)
+    result["structured_steps"] = build_structured_steps(game_state, result)
 
     return result
 
