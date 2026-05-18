@@ -9,7 +9,7 @@ import {
   VerifyResetCodeRequest,
   ResetPasswordRequest,
 } from '@/types/auth';
-import { GameState, SolveApiResponse } from '@/types/rummikub';
+import { GameState, SolveILPResponse } from '@/types/rummikub';
 
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000/api';
 const TOKEN_KEY = 'rummikub_auth_token';
@@ -210,23 +210,12 @@ async checkVisionHealth(): Promise<ApiResponse> {
   }
 }
 
-async solveGameState(gameState: GameState): Promise<SolveApiResponse> {
+async solveGameState(gameState: GameState): Promise<ApiResponse<SolveILPResponse>> {
   try {
-    const response = await this.api.post('/solve', gameState);
+    const response = await this.api.post('/solver/solve', gameState);
     return response.data;
   } catch (error) {
-    const err = this.handleError(error);
-    return {
-      success: false,
-      message: err.message,
-      data: {
-        solverResult: {
-          hasSuggestion: false,
-          suggestion: null,
-          explanation: err.message,
-        },
-      },
-    };
+    return this.handleError(error);
   }
 }
 

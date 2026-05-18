@@ -9,7 +9,13 @@
     "build": "tsc",
     "watch": "tsc --watch"
   },
-  "keywords": ["rummikub", "api", "express", "typescript", "auth"],
+  "keywords": [
+    "rummikub",
+    "api",
+    "express",
+    "typescript",
+    "auth"
+  ],
   "author": "",
   "license": "ISC",
   "dependencies": {
