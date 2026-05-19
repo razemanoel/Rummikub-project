@@ -6,6 +6,7 @@ import { Image } from 'react-native';
 interface Props {
   tile: Tile;
   onPress?: () => void;
+  isInvalid?: boolean;
 }
 
 const colorMap: Record<string, string> = {
@@ -15,7 +16,7 @@ const colorMap: Record<string, string> = {
   black: '#111827',
 };
 
-export default function TileView({ tile, onPress }: Props) {
+export default function TileView({ tile, onPress, isInvalid = false }: Props) {
   const tileColor = tile.is_joker
     ? '#8b5cf6'
     : tile.color
@@ -24,7 +25,7 @@ export default function TileView({ tile, onPress }: Props) {
 
   return (
     <Pressable onPress={onPress} style={({ pressed }) => [styles.wrapper, pressed && styles.pressed]}>
-      <View style={styles.tile}>
+      <View style={[styles.tile, isInvalid && styles.invalidTile]}>
         <Text style={[styles.value, { color: tileColor }]}>
           {tile.is_joker ? (
         <Image
@@ -94,5 +95,14 @@ const styles = StyleSheet.create({
   jokerImage: {
     width: 28,
     height: 28,
+  },
+  invalidTile: {
+    borderColor: '#ef4444',
+    borderWidth: 2,
+    shadowColor: '#ef4444',
+    shadowOpacity: 0.8,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 8,
   },
 });
