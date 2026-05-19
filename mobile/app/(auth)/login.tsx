@@ -25,15 +25,35 @@ export default function LoginScreen() {
   const [localLoading, setLocalLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
 
-  const handleLogin = async () => {
-    // Reset error message
-    setErrorMessage('');
+  const validateEmail = (email: string): string | null => {
+  const trimmedEmail = email.trim();
 
-    // Validate inputs
-    if (!email.trim()) {
-      const msg = 'Email is required';
-      setErrorMessage(msg);
-      Alert.alert('Missing Field', msg);
+  if (!trimmedEmail) {
+    return 'Email is required';
+  }
+
+  if (trimmedEmail.includes(' ')) {
+    return 'Email must not contain spaces';
+  }
+
+  if (trimmedEmail.length > 254) {
+    return 'Email is too long';
+  }
+
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+
+  if (!emailRegex.test(trimmedEmail)) {
+    return 'Please enter a valid email address';
+  }
+
+  return null;
+};
+
+  const handleLogin = async () => {
+    const emailError = validateEmail(email);
+    if (emailError) {
+      setErrorMessage(emailError);
+      Alert.alert('Invalid Email', emailError);
       return;
     }
 
@@ -44,25 +64,9 @@ export default function LoginScreen() {
       return;
     }
 
-    // Basic email validation
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) {
-      const msg = 'Please enter a valid email address';
-      setErrorMessage(msg);
-      Alert.alert('Invalid Email', msg);
-      return;
-    }
-
-    if (password.length < 6) {
-      const msg = 'Password must be at least 6 characters';
-      setErrorMessage(msg);
-      Alert.alert('Invalid Password', msg);
-      return;
-    }
-
     setLocalLoading(true);
     try {
-      await login(email, password);
+      await login(email.trim(), password);
       // Reset form
       setEmail('');
       setPassword('');
@@ -87,10 +91,6 @@ export default function LoginScreen() {
 
   const handleSignUp = () => {
     router.push('/signup');
-  };
-
-  const handleForgotPassword = () => {
-    router.push('/forgotpassword');
   };
 
   const loading = isLoading || localLoading;
@@ -192,11 +192,6 @@ export default function LoginScreen() {
                   <Text style={styles.loginButtonText}>LOGIN</Text>
                 )}
               </LinearGradient>
-            </TouchableOpacity>
-
-            {/* Forgot Password */}
-            <TouchableOpacity onPress={handleForgotPassword} disabled={loading}>
-              <Text style={styles.forgotText}>Forgot Password?</Text>
             </TouchableOpacity>
           </View>
 

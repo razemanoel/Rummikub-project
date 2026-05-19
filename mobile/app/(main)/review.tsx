@@ -239,6 +239,8 @@ export default function ReviewScreen() {
       return;
     }
 
+    await apiService.saveSolution(gameState, response.data);
+    
     router.push({
       pathname: '/(main)/solution',
       params: {

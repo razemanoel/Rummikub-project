@@ -215,10 +215,6 @@ export default function HomeScreen() {
     router.push('/(main)/history');
   };
 
-  const handleSettings = () => {
-    router.push('/(main)/settings');
-  };
-
   const handleLogout = async () => {
     try {
       setIsLoggingOut(true);
@@ -260,15 +256,6 @@ export default function HomeScreen() {
                 ]}
               >
                 <Ionicons name="time" size={20} color="#9db4ff" />
-              </Pressable>
-              <Pressable
-                onPress={handleSettings}
-                style={({ pressed }) => [
-                  styles.actionButton,
-                  pressed && styles.actionButtonPressed,
-                ]}
-              >
-                <Ionicons name="settings" size={20} color="#9db4ff" />
               </Pressable>
               <Pressable
                 onPress={handleLogout}

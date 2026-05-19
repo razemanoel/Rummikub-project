@@ -200,6 +200,32 @@ async solveGameState(gameState: GameState): Promise<ApiResponse<SolveILPResponse
   }
 }
 
+async saveSolution(originalGameState: GameState, solution: SolveILPResponse): Promise<ApiResponse> {
+  try {
+    await this.init();
+
+    const response = await this.api.post('/solutions', {
+      originalGameState,
+      solution,
+    });
+
+    return response.data;
+  } catch (error) {
+    return this.handleError(error);
+  }
+}
+
+async getSolutionsHistory(): Promise<ApiResponse> {
+  try {
+    await this.init();
+
+    const response = await this.api.get('/solutions');
+    return response.data;
+  } catch (error) {
+    return this.handleError(error);
+  }
+}
+
 async validateGameState(gameState: GameState): Promise<ApiResponse<any>> {
   try {
     const response = await this.api.post('/solver/validate', gameState);
@@ -258,7 +284,6 @@ async validateGameState(gameState: GameState): Promise<ApiResponse<any>> {
 
   // Error handling
   private handleError(error: any): ApiResponse {
-    console.error('API Error:', error);
 
     if (axios.isAxiosError(error)) {
       if (error.response?.data) {
