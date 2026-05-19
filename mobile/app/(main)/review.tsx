@@ -1,5 +1,4 @@
-import React, { useState } from 'react';
-import {
+import React, { useState, useEffect } from 'react';import {
   View,
   Text,
   StyleSheet,
@@ -14,7 +13,6 @@ import { Ionicons } from '@expo/vector-icons';
 
 import { GameState } from '@/types/rummikub';
 import TileView from '@/components/rummikub/TileView';
-import TileSetView from '@/components/rummikub/TileSetView';
 import BoardView from '@/components/rummikub/BoardView';
 import EditTileModal from '@/components/rummikub/EditTileModal';
 import { Tile } from '@/types/rummikub';
@@ -99,6 +97,13 @@ export default function ReviewScreen() {
     | null
   >(null);
 
+  const [validationErrors, setValidationErrors] = useState<string[]>([]);
+  const [isValidating, setIsValidating] = useState(false);
+  const [invalidSetIndexes, setInvalidSetIndexes] = useState<number[]>([]);
+  const [invalidTileKeys, setInvalidTileKeys] = useState<string[]>([]);
+  const isGameStateValid = validationErrors.length === 0;
+
+
   const handleEditRackTile = (index: number) => {
     setEditingTile(gameState.rack[index]);
     setEditingLocation({ type: 'rack', index });
@@ -157,6 +162,74 @@ export default function ReviewScreen() {
     setEditingLocation(null);
   };
 
+  const validateCurrentGameState = async (stateToValidate: GameState) => {
+    try {
+      setIsValidating(true);
+
+      const response = await apiService.validateGameState(stateToValidate);
+
+      if (!response.success || !response.data) {
+        setValidationErrors([response.message || 'Validation failed']);
+        return;
+      }
+
+      if (response.data.status === 'success') {
+        setValidationErrors([]);
+        setInvalidSetIndexes([]);
+        setInvalidTileKeys([]);
+        return;
+      }
+
+      const invalidSets = response.data.invalid_sets || [];
+
+      const errors =
+        invalidSets.map((item: any) =>
+          item.index >= 0
+            ? `Invalid set: ${gameState.board[item.index]?.tiles
+                .map((tile) =>
+                  tile.is_joker ? 'joker' : `${tile.value} ${tile.color}`
+                )
+                .join(', ')} - ${item.reason}`
+            : item.reason
+        ) || ['Invalid game state'];
+
+      const invalidIndexes = invalidSets
+        .filter((item: any) => item.index >= 0)
+        .map((item: any) => item.index);
+
+      const duplicateKeys = invalidSets
+      .map((item: any) => item.reason)
+      .flatMap((reason: string) => {
+        if (reason.includes('Too many jokers')) {
+          return ['joker'];
+        }
+
+        if (reason.startsWith('Too many copies of tile')) {
+          const match = reason.match(/tile (\d+) (\w+)/);
+          return match ? [`${match[1]}-${match[2]}`] : [];
+        }
+
+        return [];
+      });
+
+      setValidationErrors(errors);
+      setInvalidSetIndexes(invalidIndexes);
+      setInvalidTileKeys(duplicateKeys);
+    } catch (error: any) {
+      setValidationErrors([error.message || 'Validation failed']);
+    } finally {
+      setIsValidating(false);
+    }
+  };
+
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      validateCurrentGameState(gameState);
+    }, 400);
+
+    return () => clearTimeout(timeoutId);
+  }, [gameState]);
+
   const handleConfirm = async () => {
   try {
     const response = await apiService.solveGameState(gameState);
@@ -199,20 +272,53 @@ export default function ReviewScreen() {
             <Text style={styles.sectionTitle}>Your Rack</Text>
             <View style={styles.rackRow}>
               {gameState.rack.map((tile, index) => (
-                <TileView key={index} tile={tile} onPress={() => handleEditRackTile(index)} />
+                <TileView
+                  key={index}
+                  tile={tile}
+                  isInvalid={
+                    tile.is_joker
+                      ? invalidTileKeys.includes('joker')
+                      : invalidTileKeys.includes(`${tile.value}-${tile.color}`)
+                  }
+                  onPress={() => handleEditRackTile(index)}
+                />
               ))}
             </View>
           </View>
 
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Shared Board</Text>
-            <BoardView board={gameState.board} onTilePress={handleEditBoardTile} />
+            <BoardView
+              board={gameState.board}
+              onTilePress={handleEditBoardTile}
+              invalidSetIndexes={invalidSetIndexes}
+              invalidTileKeys={invalidTileKeys}
+            />
           </View>
+          {validationErrors.length > 0 && (
+            <View style={styles.validationBox}>
+              <Text style={styles.validationTitle}>Invalid board state</Text>
 
-          <Pressable style={styles.confirmButton} onPress={handleConfirm}>
-            <Ionicons name="checkmark-circle" size={22} color="#ffffff" />
-            <Text style={styles.confirmText}>Confirm and Solve</Text>
-          </Pressable>
+              {validationErrors.map((error, index) => (
+                <Text key={index} style={styles.validationText}>
+                  • {error}
+                </Text>
+              ))}
+            </View>
+          )}
+          <Pressable
+          style={[
+            styles.confirmButton,
+            (!isGameStateValid || isValidating) && styles.confirmButtonDisabled,
+          ]}
+          onPress={handleConfirm}
+          disabled={!isGameStateValid || isValidating}
+        >
+          <Ionicons name="checkmark-circle" size={22} color="#ffffff" />
+          <Text style={styles.confirmText}>
+            {isValidating ? 'Checking...' : 'Confirm and Solve'}
+          </Text>
+        </Pressable>
         </ScrollView>
       </SafeAreaView>
       <EditTileModal
@@ -292,5 +398,31 @@ const styles = StyleSheet.create({
     fontSize: 17,
     fontWeight: '800',
     marginLeft: 8,
+  },
+  validationBox: {
+    backgroundColor: 'rgba(239, 68, 68, 0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(239, 68, 68, 0.45)',
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 18,
+  },
+
+  validationTitle: {
+    color: '#fca5a5',
+    fontSize: 16,
+    fontWeight: '900',
+    marginBottom: 8,
+  },
+
+  validationText: {
+    color: '#fecaca',
+    fontSize: 13,
+    lineHeight: 19,
+    fontWeight: '600',
+  },
+
+  confirmButtonDisabled: {
+    opacity: 0.45,
   },
 });

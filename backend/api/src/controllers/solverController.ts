@@ -28,4 +28,28 @@ export class SolverController {
       });
     }
   }
+
+  static async validate(req: Request, res: Response) {
+    try {
+      const gameState = req.body;
+
+      const response = await axios.post(
+        `${VISION_SOLVER_URL}/validate-game-state`,
+        gameState
+      );
+
+      return res.status(200).json({
+        success: true,
+        message: 'Game state validated successfully',
+        data: response.data,
+      });
+    } catch (error: any) {
+      console.error('Validation error:', error.message);
+
+      return res.status(500).json({
+        success: false,
+        message: 'Failed to validate game state',
+      });
+    }
+  }
 }

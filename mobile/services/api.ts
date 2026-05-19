@@ -219,6 +219,15 @@ async solveGameState(gameState: GameState): Promise<ApiResponse<SolveILPResponse
   }
 }
 
+async validateGameState(gameState: GameState): Promise<ApiResponse<any>> {
+  try {
+    const response = await this.api.post('/solver/validate', gameState);
+    return response.data;
+  } catch (error) {
+    return this.handleError(error);
+  }
+}
+
   // Token management
   private async setToken(token: string) {
     this.token = token;

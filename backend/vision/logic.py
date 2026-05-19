@@ -114,12 +114,56 @@ def validate_board(board: List[TileSet]) -> Tuple[bool, List[InvalidSetInfo]]:
 
 def validate_game_state(game_state: GameState) -> Tuple[bool, List[InvalidSetInfo]]:
     """
-    For now, a valid game state means:
-    - every set on the board is valid
-
-    Later this function can be extended to check:
-    - rack constraints
-    - opening move
-    - move legality
+    Validate the full game state:
+    - every board set is legal
+    - no more than 2 identical non-joker tiles exist in the whole game
+    - no more than 2 jokers exist in the whole game
     """
-    return validate_board(game_state.board)
+    invalid_sets: List[InvalidSetInfo] = []
+
+    # 1. Validate board sets
+    is_board_valid, board_invalid_sets = validate_board(game_state.board)
+    invalid_sets.extend(board_invalid_sets)
+
+    # 2. Count all tiles in rack + board
+    tile_counts = {}
+    joker_count = 0
+
+    all_tiles: List[Tile] = []
+
+    all_tiles.extend(game_state.rack)
+
+    for tile_set in game_state.board:
+        all_tiles.extend(tile_set.tiles)
+
+    for tile in all_tiles:
+        if tile.is_joker:
+            joker_count += 1
+            continue
+
+        key = (tile.value, tile.color.value if tile.color else None)
+        tile_counts[key] = tile_counts.get(key, 0) + 1
+
+    # 3. Check joker limit
+    if joker_count > 2:
+        invalid_sets.append(
+            InvalidSetInfo(
+                index=-1,
+                reason=f"Too many jokers in game: found {joker_count}, maximum allowed is 2"
+            )
+        )
+
+    # 4. Check duplicate tile limit
+    for (value, color), count in tile_counts.items():
+        if count > 2:
+            invalid_sets.append(
+                InvalidSetInfo(
+                    index=-1,
+                    reason=(
+                        f"Too many copies of tile {value} {color}: "
+                        f"found {count}, maximum allowed is 2"
+                    )
+                )
+            )
+
+    return len(invalid_sets) == 0, invalid_sets
