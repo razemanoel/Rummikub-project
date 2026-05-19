@@ -156,27 +156,46 @@ async analyzeBoards(
       return 'image/jpeg';
     };
 
-    // Add myBoard image if provided
-    if (myBoardUri) {
-      formData.append('myBoard', {
-        uri: myBoardUri,
-        type: getMimeType(myBoardUri),
-        name: 'myBoard.jpg',
-      } as any);
+    if (isWeb) {
+      // On web, fetch the blob URL and convert to File
+      const appendWebFile = async (uri: string, fieldName: string) => {
+        const response = await fetch(uri);
+        const blob = await response.blob();
+        const ext = getMimeType(uri) === 'image/png' ? 'png' : 'jpg';
+        const file = new File([blob], `${fieldName}.${ext}`, { type: getMimeType(uri) });
+        formData.append(fieldName, file);
+      };
+
+      if (myBoardUri) await appendWebFile(myBoardUri, 'myBoard');
+      if (sharedBoardUri) await appendWebFile(sharedBoardUri, 'sharedBoard');
+
+      // On web, null removes the default header so browser sets Content-Type with boundary automatically
+      const response = await this.api.post('/vision/analyze', formData, {
+        headers: { 'Content-Type': null },
+      });
+      return response.data;
+    } else {
+      // On React Native native, use the URI object approach
+      if (myBoardUri) {
+        formData.append('myBoard', {
+          uri: myBoardUri,
+          type: getMimeType(myBoardUri),
+          name: 'myBoard.jpg',
+        } as any);
+      }
+      if (sharedBoardUri) {
+        formData.append('sharedBoard', {
+          uri: sharedBoardUri,
+          type: getMimeType(sharedBoardUri),
+          name: 'sharedBoard.jpg',
+        } as any);
+      }
+
+      const response = await this.api.post('/vision/analyze', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      return response.data;
     }
-
-    // Add sharedBoard image if provided
-    if (sharedBoardUri) {
-      formData.append('sharedBoard', {
-        uri: sharedBoardUri,
-        type: getMimeType(sharedBoardUri),
-        name: 'sharedBoard.jpg',
-      } as any);
-    }
-
-    const response = await this.api.post('/vision/analyze', formData);
-
-    return response.data;
   } catch (error) {
     return this.handleError(error);
   }

@@ -16,8 +16,10 @@ import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import UploadCard from '@/components/upload-card';
+import AnalysisResultScreen from '@/components/AnalysisResultScreen';
 import { useAuth } from '@/context/AuthContext';
 import { apiService } from '@/services/api';
+import { AnalysisResult } from '@/types/rummikub';
 
 export default function HomeScreen() {
   const router = useRouter();
@@ -28,7 +30,7 @@ export default function HomeScreen() {
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [showPickerForType, setShowPickerForType] = useState<'myBoard' | 'shared' | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [analysisResults, setAnalysisResults] = useState<any | null>(null);
+  const [analysisResults, setAnalysisResults] = useState<AnalysisResult | null>(null);
 
   const handleUploadMyBoard = () => {
     if (Platform.OS === 'web') {
@@ -173,15 +175,9 @@ export default function HomeScreen() {
         sharedBoardImages[0]
       );
 
-      setAnalysisResults(result);
-
       if (result.success) {
-        const myBoardTiles = result.data?.myBoardDetections?.length || 0;
-        const sharedBoardTiles = result.data?.sharedBoardDetections?.length || 0;
-        Alert.alert(
-          'Analysis Complete',
-          `${result.message}\n\nMy Board: ${myBoardTiles} tiles\nShared Board: ${sharedBoardTiles} tiles`
-        );
+        // Navigate to the result screen — show detections + solver
+        setAnalysisResults(result as AnalysisResult);
       } else {
         Alert.alert('Analysis Failed', result.message);
       }
@@ -229,6 +225,16 @@ export default function HomeScreen() {
 
   const isDisabled = myBoardImages.length === 0 && sharedBoardImages.length === 0;
   const totalImages = myBoardImages.length + sharedBoardImages.length;
+
+  // ── Show result screen after a successful analysis ──────────────────────
+  if (analysisResults) {
+    return (
+      <AnalysisResultScreen
+        result={analysisResults}
+        onBack={() => setAnalysisResults(null)}
+      />
+    );
+  }
 
   return (
     <LinearGradient
@@ -410,96 +416,7 @@ export default function HomeScreen() {
             <Text style={styles.reviewButtonText}>Open Review Screen</Text>
           </Pressable>
 
-          {/* Analysis Results */}
-          {analysisResults && analysisResults.success && (
-            <>
-              {/* My Board Results */}
-              {analysisResults.data?.myBoardDetections && analysisResults.data.myBoardDetections.length > 0 && (
-                <View style={styles.resultsContainer}>
-                  <View style={styles.resultsHeader}>
-                    <Ionicons name="checkmark-circle" size={24} color="#10b981" />
-                    <Text style={styles.resultsTitle}>My Board - {analysisResults.data.myBoardDetections.length} Tiles</Text>
-                  </View>
-                  <ScrollView
-                    horizontal
-                    showsHorizontalScrollIndicator={false}
-                    style={styles.tilesScroll}
-                  >
-                    {analysisResults.data.myBoardDetections.map((tile: any, idx: number) => (
-                      <View key={`myboard-${idx}`} style={styles.tileResult}>
-                        <View
-                          style={[
-                            styles.tileNumber,
-                            {
-                              backgroundColor:
-                                tile.tile_color === 'red'
-                                  ? '#ef4444'
-                                  : tile.tile_color === 'blue'
-                                  ? '#3b82f6'
-                                  : tile.tile_color === 'yellow'
-                                  ? '#fbbf24'
-                                  : '#000000',
-                            },
-                          ]}
-                        >
-                          <Text style={styles.tileValue}>
-                            {tile.tile_number || '?'}
-                          </Text>
-                        </View>
-                        <Text style={styles.tileColor}>{tile.tile_color}</Text>
-                        <Text style={styles.tileConfidence}>
-                          {(tile.confidence * 100).toFixed(0)}%
-                        </Text>
-                      </View>
-                    ))}
-                  </ScrollView>
-                </View>
-              )}
 
-              {/* Shared Board Results */}
-              {analysisResults.data?.sharedBoardDetections && analysisResults.data.sharedBoardDetections.length > 0 && (
-                <View style={styles.resultsContainer}>
-                  <View style={styles.resultsHeader}>
-                    <Ionicons name="checkmark-circle" size={24} color="#10b981" />
-                    <Text style={styles.resultsTitle}>Shared Board - {analysisResults.data.sharedBoardDetections.length} Tiles</Text>
-                  </View>
-                  <ScrollView
-                    horizontal
-                    showsHorizontalScrollIndicator={false}
-                    style={styles.tilesScroll}
-                  >
-                    {analysisResults.data.sharedBoardDetections.map((tile: any, idx: number) => (
-                      <View key={`shared-${idx}`} style={styles.tileResult}>
-                        <View
-                          style={[
-                            styles.tileNumber,
-                            {
-                              backgroundColor:
-                                tile.tile_color === 'red'
-                                  ? '#ef4444'
-                                  : tile.tile_color === 'blue'
-                                  ? '#3b82f6'
-                                  : tile.tile_color === 'yellow'
-                                  ? '#fbbf24'
-                                  : '#000000',
-                            },
-                          ]}
-                        >
-                          <Text style={styles.tileValue}>
-                            {tile.tile_number || '?'}
-                          </Text>
-                        </View>
-                        <Text style={styles.tileColor}>{tile.tile_color}</Text>
-                        <Text style={styles.tileConfidence}>
-                          {(tile.confidence * 100).toFixed(0)}%
-                        </Text>
-                      </View>
-                    ))}
-                  </ScrollView>
-                </View>
-              )}
-            </>
-          )}
 
           {/* Info Section */}
           <View style={styles.infoSection}>
@@ -730,57 +647,5 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     color: '#9ca3af',
     textAlign: 'center',
-  },
-  resultsContainer: {
-    backgroundColor: 'rgba(16, 185, 129, 0.1)',
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 24,
-    borderWidth: 1,
-    borderColor: 'rgba(16, 185, 129, 0.3)',
-  },
-  resultsHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  resultsTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#10b981',
-    marginLeft: 8,
-  },
-  tilesScroll: {
-    flexDirection: 'row',
-  },
-  tileResult: {
-    alignItems: 'center',
-    marginRight: 16,
-    paddingVertical: 12,
-  },
-  tileNumber: {
-    width: 56,
-    height: 56,
-    borderRadius: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  tileValue: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: '#ffffff',
-  },
-  tileColor: {
-    fontSize: 12,
-    color: '#86efac',
-    fontWeight: '500',
-    marginBottom: 4,
-    textTransform: 'capitalize',
-  },
-  tileConfidence: {
-    fontSize: 11,
-    color: '#a1f3d1',
-    fontWeight: '400',
   },
 });

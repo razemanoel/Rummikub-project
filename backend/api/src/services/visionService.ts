@@ -1,5 +1,6 @@
 import axios, { AxiosInstance } from 'axios';
 import FormData from 'form-data';
+import { SolverResponse } from '../types/rummikub';
 
 type MulterFile = Express.Multer.File;
 
@@ -34,6 +35,8 @@ export interface BoardAnalysisResponse {
   data: {
     myBoardDetections: TileDetection[] | null;
     sharedBoardDetections: TileDetection[] | null;
+    /** Move suggestion produced by the solver after vision detection */
+    suggestedMove?: SolverResponse;
   };
 }
 
