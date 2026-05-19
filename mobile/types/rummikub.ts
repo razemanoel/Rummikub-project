@@ -1,84 +1,49 @@
-// Raw detection returned by the backend vision service
-export interface TileDetection {
-  tile_number: number | null;
-  tile_color: string | null;
-  confidence: number;
-}
-
-// Tile colors recognised by the game
 export type TileColor = 'red' | 'blue' | 'yellow' | 'black';
 
-// Mutable tile used in the UI (can be corrected by the user)
-export interface EditableTile {
-  /** Stable key for React lists */
-  id: string;
-  /** 1-13, or null for joker */
-  number: number | null;
-  /** null for joker */
+export interface Tile {
+  value: number | null;
   color: TileColor | null;
-  isJoker: boolean;
-  /** Original confidence from vision service (0-1) */
-  confidence: number;
+  is_joker: boolean;
 }
 
-// ── Game state types (sent to POST /api/solve) ────────────────────────────
-
-/** A tile as the backend solver expects it. */
-export interface GameTile {
-  value: number | null;  // 1-13, null for joker
-  color: TileColor | null; // null for joker
-  isJoker: boolean;
+export interface TileSet {
+  tiles: Tile[];
 }
 
-/** A set of tiles already on the shared board. */
-export interface GameTileSet {
-  tiles: GameTile[];
-}
-
-/** Full game state sent to the solve endpoint. */
 export interface GameState {
-  rack: GameTile[];
-  board: GameTileSet[];
+  rack: Tile[];
+  board: TileSet[];
 }
 
-/** Response shape from POST /api/solve */
-export interface SolveApiResponse {
-  success: boolean;
-  message?: string;
-  data: {
-    solverResult: SolverResponse;
-  };
+export interface JokerAssignment {
+  value: number;
+  color: TileColor;
+  type: 'run' | 'group';
 }
 
-// ── Solver types (mirror backend/api/src/types/rummikub.ts) ────────────────
+export interface StructuredBoardSource {
+  set_index: number;
+  tiles: Tile[];
+}
 
-export type MoveActionType = 'new_set' | 'extend_set';
-
-export interface MoveAction {
-  type: MoveActionType;
-  tilesFromRack: Array<{ value: number | null; color: string | null; isJoker: boolean }>;
-  boardSetIndex?: number;
+export interface StructuredStep {
+  type: string;
   description: string;
+  take_from_rack: Tile[];
+  take_from_board: StructuredBoardSource[];
+  result_set: TileSet;
 }
 
-export interface MoveSuggestion {
-  actions: MoveAction[];
-  tilesPlayed: number;
-}
-
-export interface SolverResponse {
-  hasSuggestion: boolean;
-  suggestion: MoveSuggestion | null;
-  explanation: string;
-}
-
-// Full API response shape for /api/vision/analyze
-export interface AnalysisResult {
-  success: boolean;
+export interface SolveILPResponse {
+  status: string;
   message: string;
-  data: {
-    myBoardDetections: TileDetection[] | null;
-    sharedBoardDetections: TileDetection[] | null;
-    suggestedMove?: SolverResponse;
-  };
+  solver_status: string;
+  candidate_count: number;
+  solve_time_seconds: number;
+  tiles_used_count: number;
+  remaining_rack: Tile[];
+  new_board: TileSet[];
+  joker_assignments: JokerAssignment[];
+  steps: string[];
+  structured_steps: StructuredStep[];
 }

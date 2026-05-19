@@ -5,3 +5,4 @@ pytest
 opencv-python
 numpy
 python-multipart
+pulp

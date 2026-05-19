@@ -9,7 +9,7 @@ import {
   VerifyResetCodeRequest,
   ResetPasswordRequest,
 } from '@/types/auth';
-import { GameState, SolveApiResponse } from '@/types/rummikub';
+import { GameState, SolveILPResponse } from '@/types/rummikub';
 
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000/api';
 const TOKEN_KEY = 'rummikub_auth_token';
@@ -156,46 +156,27 @@ async analyzeBoards(
       return 'image/jpeg';
     };
 
-    if (isWeb) {
-      // On web, fetch the blob URL and convert to File
-      const appendWebFile = async (uri: string, fieldName: string) => {
-        const response = await fetch(uri);
-        const blob = await response.blob();
-        const ext = getMimeType(uri) === 'image/png' ? 'png' : 'jpg';
-        const file = new File([blob], `${fieldName}.${ext}`, { type: getMimeType(uri) });
-        formData.append(fieldName, file);
-      };
-
-      if (myBoardUri) await appendWebFile(myBoardUri, 'myBoard');
-      if (sharedBoardUri) await appendWebFile(sharedBoardUri, 'sharedBoard');
-
-      // On web, null removes the default header so browser sets Content-Type with boundary automatically
-      const response = await this.api.post('/vision/analyze', formData, {
-        headers: { 'Content-Type': null },
-      });
-      return response.data;
-    } else {
-      // On React Native native, use the URI object approach
-      if (myBoardUri) {
-        formData.append('myBoard', {
-          uri: myBoardUri,
-          type: getMimeType(myBoardUri),
-          name: 'myBoard.jpg',
-        } as any);
-      }
-      if (sharedBoardUri) {
-        formData.append('sharedBoard', {
-          uri: sharedBoardUri,
-          type: getMimeType(sharedBoardUri),
-          name: 'sharedBoard.jpg',
-        } as any);
-      }
-
-      const response = await this.api.post('/vision/analyze', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-      });
-      return response.data;
+    // Add myBoard image if provided
+    if (myBoardUri) {
+      formData.append('myBoard', {
+        uri: myBoardUri,
+        type: getMimeType(myBoardUri),
+        name: 'myBoard.jpg',
+      } as any);
     }
+
+    // Add sharedBoard image if provided
+    if (sharedBoardUri) {
+      formData.append('sharedBoard', {
+        uri: sharedBoardUri,
+        type: getMimeType(sharedBoardUri),
+        name: 'sharedBoard.jpg',
+      } as any);
+    }
+
+    const response = await this.api.post('/vision/analyze', formData);
+
+    return response.data;
   } catch (error) {
     return this.handleError(error);
   }
@@ -210,23 +191,47 @@ async checkVisionHealth(): Promise<ApiResponse> {
   }
 }
 
-async solveGameState(gameState: GameState): Promise<SolveApiResponse> {
+async solveGameState(gameState: GameState): Promise<ApiResponse<SolveILPResponse>> {
   try {
-    const response = await this.api.post('/solve', gameState);
+    const response = await this.api.post('/solver/solve', gameState);
     return response.data;
   } catch (error) {
-    const err = this.handleError(error);
-    return {
-      success: false,
-      message: err.message,
-      data: {
-        solverResult: {
-          hasSuggestion: false,
-          suggestion: null,
-          explanation: err.message,
-        },
-      },
-    };
+    return this.handleError(error);
+  }
+}
+
+async saveSolution(originalGameState: GameState, solution: SolveILPResponse): Promise<ApiResponse> {
+  try {
+    await this.init();
+
+    const response = await this.api.post('/solutions', {
+      originalGameState,
+      solution,
+    });
+
+    return response.data;
+  } catch (error) {
+    return this.handleError(error);
+  }
+}
+
+async getSolutionsHistory(): Promise<ApiResponse> {
+  try {
+    await this.init();
+
+    const response = await this.api.get('/solutions');
+    return response.data;
+  } catch (error) {
+    return this.handleError(error);
+  }
+}
+
+async validateGameState(gameState: GameState): Promise<ApiResponse<any>> {
+  try {
+    const response = await this.api.post('/solver/validate', gameState);
+    return response.data;
+  } catch (error) {
+    return this.handleError(error);
   }
 }
 
@@ -279,7 +284,6 @@ async solveGameState(gameState: GameState): Promise<SolveApiResponse> {
 
   // Error handling
   private handleError(error: any): ApiResponse {
-    console.error('API Error:', error);
 
     if (axios.isAxiosError(error)) {
       if (error.response?.data) {

@@ -1,5 +1,4 @@
-import React from 'react';
-import {
+import React, { useEffect, useState } from 'react';import {
   View,
   ScrollView,
   Text,
@@ -11,37 +10,46 @@ import {
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
+import { apiService } from '@/services/api';
 
 export default function HistoryScreen() {
   const router = useRouter();
+  const [historyItems, setHistoryItems] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  // Placeholder data - replace with actual API call
-  const historyItems = [
-    {
-      id: '1',
-      date: 'Apr 23, 2026',
-      time: '2:30 PM',
-      moves: '5 moves found',
-      boardType: 'My Board',
-    },
-    {
-      id: '2',
-      date: 'Apr 22, 2026',
-      time: '10:15 AM',
-      moves: '3 moves found',
-      boardType: 'Shared Board',
-    },
-    {
-      id: '3',
-      date: 'Apr 21, 2026',
-      time: '7:45 PM',
-      moves: '7 moves found',
-      boardType: 'My Board',
-    },
-  ];
+  useEffect(() => {
+    loadHistory();
+  }, []);
+
+  const loadHistory = async () => {
+    try {
+      setLoading(true);
+
+      const response = await apiService.getSolutionsHistory();
+
+      if (!response.success || !response.data) {
+        return;
+      }
+
+      setHistoryItems(response.data);
+    } catch (error) {
+      console.error('Failed to load history:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const renderHistoryItem = ({ item }: any) => (
     <Pressable
+      onPress={() =>
+        router.push({
+          pathname: '/(main)/solution',
+          params: {
+            originalGameState: JSON.stringify(item.originalGameState),
+            solution: JSON.stringify(item.solution),
+          },
+        })
+      }
       style={({ pressed }) => [
         styles.historyItem,
         pressed && styles.historyItemPressed,
@@ -56,13 +64,21 @@ export default function HistoryScreen() {
           />
         </View>
         <View style={styles.itemContent}>
-          <Text style={styles.itemDate}>{item.date}</Text>
-          <Text style={styles.itemMoves}>{item.moves}</Text>
+          <Text style={styles.itemDate}>
+            {new Date(item.createdAt).toLocaleDateString()}
+          </Text>
+          <Text style={styles.itemMoves}>
+            {item.solution?.tiles_used_count || 0} tiles used
+          </Text>
         </View>
       </View>
       <View style={styles.itemRight}>
-        <Text style={styles.itemTime}>{item.time}</Text>
-        <Text style={styles.itemType}>{item.boardType}</Text>
+        <Text style={styles.itemTime}>
+          {new Date(item.createdAt).toLocaleTimeString()}
+        </Text>
+        <Text style={styles.itemType}>
+          {item.solution?.candidate_count || 0} sets
+        </Text>
       </View>
     </Pressable>
   );
@@ -86,14 +102,18 @@ export default function HistoryScreen() {
         </View>
 
         {/* Content */}
-        {historyItems.length > 0 ? (
+        {!loading && historyItems.length > 0 ? (
           <FlatList
             data={historyItems}
             renderItem={renderHistoryItem}
-            keyExtractor={(item) => item.id}
+            keyExtractor={(item, index) => item._id?.toString() || index.toString()}
             scrollEnabled={false}
             contentContainerStyle={styles.listContent}
           />
+        ) : loading ? (
+          <View style={styles.emptyContainer}>
+            <Text style={styles.emptyText}>Loading history...</Text>
+          </View>
         ) : (
           <View style={styles.emptyContainer}>
             <Ionicons name="time" size={64} color="#4f8dfd" />

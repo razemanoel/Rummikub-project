@@ -198,6 +198,7 @@ export default function HomeScreen() {
       useNativeDriver: Platform.OS !== 'web',
     }).start();
   };
+  
 
   const handleAnalyzePressOut = () => {
     Animated.spring(analyzeButtonScale, {
@@ -208,10 +209,6 @@ export default function HomeScreen() {
 
   const handleHistory = () => {
     router.push('/(main)/history');
-  };
-
-  const handleSettings = () => {
-    router.push('/(main)/settings');
   };
 
   const handleLogout = async () => {
@@ -265,15 +262,6 @@ export default function HomeScreen() {
                 ]}
               >
                 <Ionicons name="time" size={20} color="#9db4ff" />
-              </Pressable>
-              <Pressable
-                onPress={handleSettings}
-                style={({ pressed }) => [
-                  styles.actionButton,
-                  pressed && styles.actionButtonPressed,
-                ]}
-              >
-                <Ionicons name="settings" size={20} color="#9db4ff" />
               </Pressable>
               <Pressable
                 onPress={handleLogout}
@@ -415,6 +403,18 @@ export default function HomeScreen() {
               </LinearGradient>
             </Animated.View>
           </Pressable>
+          
+                    {/* Temporary Review Screen Button */}
+          <Pressable
+            onPress={() => router.push('/(main)/review')}
+            style={({ pressed }) => [
+              styles.reviewButton,
+              pressed && styles.reviewButtonPressed,
+            ]}
+          >
+            <Ionicons name="create" size={20} color="#ffffff" style={{ marginRight: 8 }} />
+            <Text style={styles.reviewButtonText}>Open Review Screen</Text>
+          </Pressable>
 
 
 
@@ -550,6 +550,26 @@ const styles = StyleSheet.create({
   analyzeButtonDisabled: {
     opacity: 0.6,
   },
+
+    reviewButton: {
+    backgroundColor: 'rgba(245, 158, 11, 0.9)',
+    borderRadius: 16,
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+    marginBottom: 24,
+  },
+  reviewButtonPressed: {
+    opacity: 0.85,
+  },
+  reviewButtonText: {
+    color: '#ffffff',
+    fontSize: 16,
+    fontWeight: '700',
+  },
+
   infoSection: {
     backgroundColor: 'rgba(79, 141, 253, 0.08)',
     borderRadius: 12,

@@ -28,42 +28,81 @@ export default function SignUpScreen() {
 
   const loading = isLoading || localLoading;
 
+  const validateEmail = (email: string): string | null => {
+  const trimmedEmail = email.trim();
+
+  if (!trimmedEmail) {
+    return 'Email is required';
+  }
+
+  if (trimmedEmail.includes(' ')) {
+    return 'Email must not contain spaces';
+  }
+
+  if (trimmedEmail.length > 254) {
+    return 'Email is too long';
+  }
+
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+
+  if (!emailRegex.test(trimmedEmail)) {
+    return 'Please enter a valid email address';
+  }
+
+  return null;
+};
+
+const validatePasswordForSignUp = (password: string): string | null => {
+    if (!password) {
+      return 'Password is required';
+    }
+
+    if (password.length < 8) {
+      return 'Password must be at least 8 characters';
+    }
+
+    if (/\s/.test(password)) {
+      return 'Password must not contain spaces';
+    }
+
+    if (!/[a-z]/.test(password)) {
+      return 'Password must contain at least one lowercase letter';
+    }
+
+    if (!/[A-Z]/.test(password)) {
+      return 'Password must contain at least one uppercase letter';
+    }
+
+    if (!/[0-9]/.test(password)) {
+      return 'Password must contain at least one number';
+    }
+
+    if (!/[!@#$%^&*(),.?":{}|<>_\-+=/\\[\]`~;]/.test(password)) {
+      return 'Password must contain at least one special character';
+    }
+
+    return null;
+  };
+
   const handleSignUp = async () => {
-    setErrorMessage('');
-    
-    if (!email.trim()) {
-      const msg = 'Email is required';
-      setErrorMessage(msg);
-      Alert.alert('Missing Field', msg);
+    const emailError = validateEmail(email);
+    if (emailError) {
+      setErrorMessage(emailError);
+      Alert.alert('Invalid Email', emailError);
       return;
     }
 
-    if (!password.trim()) {
-      const msg = 'Password is required';
-      setErrorMessage(msg);
-      Alert.alert('Missing Field', msg);
+    const passwordError = validatePasswordForSignUp(password);
+    if (passwordError) {
+      setErrorMessage(passwordError);
+      Alert.alert('Invalid Password', passwordError);
       return;
     }
 
-    if (!confirmPassword.trim()) {
+    if (!confirmPassword) {
       const msg = 'Confirm password is required';
       setErrorMessage(msg);
       Alert.alert('Missing Field', msg);
-      return;
-    }
-
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) {
-      const msg = 'Please enter a valid email address';
-      setErrorMessage(msg);
-      Alert.alert('Invalid Email', msg);
-      return;
-    }
-
-    if (password.length < 6) {
-      const msg = 'Password must be at least 6 characters';
-      setErrorMessage(msg);
-      Alert.alert('Invalid Password', msg);
       return;
     }
 
@@ -76,7 +115,7 @@ export default function SignUpScreen() {
 
     setLocalLoading(true);
     try {
-      await signup(email, password, confirmPassword);
+      await signup(email.trim(), password, confirmPassword);
       setEmail('');
       setPassword('');
       setConfirmPassword('');
@@ -115,9 +154,26 @@ export default function SignUpScreen() {
           {/* Card */}
           <View style={styles.card}>
             <Text style={styles.title}>Create Account</Text>
-            <Text style={styles.subtitle}>
-              Join the game and start playing
-            </Text>
+
+            <View style={styles.requirementsBox}>
+              <View style={styles.requirementsHeader}>
+                <Ionicons name="shield-checkmark" size={18} color="#f59e0b" />
+                <Text style={styles.requirementsTitle}>Password requirements</Text>
+              </View>
+
+              {[
+                'At least 8 characters',
+                'One uppercase letter',
+                'One lowercase letter',
+                'One number',
+                'One special character',
+              ].map((item) => (
+                <View key={item} style={styles.requirementRow}>
+                  <Ionicons name="checkmark-circle" size={14} color="#73a9ff" />
+                  <Text style={styles.requirementText}>{item}</Text>
+                </View>
+              ))}
+            </View>
 
             {/* Error Message */}
             {errorMessage ? (
@@ -346,5 +402,40 @@ const styles = StyleSheet.create({
     color: '#fca5a5',
     fontSize: 14,
     fontWeight: '500',
+  },
+  requirementsBox: {
+    backgroundColor: 'rgba(79, 141, 253, 0.10)',
+    borderWidth: 1,
+    borderColor: 'rgba(79, 141, 253, 0.25)',
+    borderRadius: 14,
+    padding: 14,
+    marginTop: 14,
+    marginBottom: 18,
+  },
+
+  requirementsHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+
+  requirementsTitle: {
+    color: '#ffffff',
+    fontSize: 14,
+    fontWeight: '800',
+    marginLeft: 8,
+  },
+
+  requirementRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+
+  requirementText: {
+    color: '#cbd5e1',
+    fontSize: 12,
+    fontWeight: '600',
+    marginLeft: 8,
   },
 });

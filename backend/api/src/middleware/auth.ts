@@ -3,6 +3,7 @@ import { verifyToken, TokenPayload } from '../config/jwt';
 
 export interface AuthRequest extends Request {
   user?: TokenPayload;
+  files?: Express.Multer.File[] | { [fieldname: string]: Express.Multer.File[] };
 }
 
 export function authMiddleware(req: AuthRequest, res: Response, next: NextFunction) {
