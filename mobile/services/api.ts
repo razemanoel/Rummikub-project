@@ -174,7 +174,11 @@ async analyzeBoards(
       } as any);
     }
 
-    const response = await this.api.post('/vision/analyze', formData);
+    const response = await this.api.post('/vision/analyze', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
 
     return response.data;
   } catch (error) {

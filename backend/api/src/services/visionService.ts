@@ -109,73 +109,61 @@ class VisionService {
    * 2. Sends images to Vision service
    * 3. Aggregates results into a single response
    */
-  async analyzeBoards(
-    myBoardFile: MulterFile | undefined,
-    sharedBoardFile: MulterFile | undefined
-  ): Promise<BoardAnalysisResponse> {
-    try {
-      // Ensure at least one image is provided
-      if (!myBoardFile && !sharedBoardFile) {
-        return {
-          success: false,
-          message: 'At least one board image is required',
-          data: {
-            myBoardDetections: null,
-            sharedBoardDetections: null,
-          },
-        };
-      }
-
-      // Optional: check Vision service health before processing
-      const isHealthy = await this.healthCheck();
-      if (!isHealthy) {
-        throw new Error('Vision server is not responding');
-      }
-
-      /**
-       * Process both images in parallel
-       * If one image is missing, resolve with null
-       */
-      const results = await Promise.all([
-        myBoardFile
-          ? this.classifyTiles(
-              myBoardFile.buffer,
-              myBoardFile.originalname,
-              myBoardFile.mimetype
-            )
-          : Promise.resolve(null),
-
-        sharedBoardFile
-          ? this.classifyTiles(
-              sharedBoardFile.buffer,
-              sharedBoardFile.originalname,
-              sharedBoardFile.mimetype
-            )
-          : Promise.resolve(null),
-      ]);
-
-      const [myBoardResult, sharedBoardResult] = results;
-
-      return {
-        success: true,
-        message: 'Boards analyzed successfully',
-        data: {
-          myBoardDetections: myBoardResult?.tiles || null,
-          sharedBoardDetections: sharedBoardResult?.tiles || null,
-        },
-      };
-    } catch (error: any) {
-      console.error('Board analysis failed:', error.message);
-
+async analyzeBoards(
+  myBoardFile: MulterFile | undefined,
+  sharedBoardFile: MulterFile | undefined
+): Promise<any> {
+  try {
+    if (!myBoardFile && !sharedBoardFile) {
       return {
         success: false,
-        message: error.message || 'Failed to analyze boards',
-        data: {
-          myBoardDetections: null,
-          sharedBoardDetections: null,
-        },
+        message: 'At least one board image is required',
+        data: null,
       };
     }
+
+    const isHealthy = await this.healthCheck();
+    if (!isHealthy) {
+      throw new Error('Vision server is not responding');
+    }
+
+    const formData = new FormData();
+
+    if (myBoardFile) {
+      formData.append('myBoard', myBoardFile.buffer, {
+        filename: myBoardFile.originalname || 'myBoard.jpg',
+        contentType: myBoardFile.mimetype,
+      });
+    }
+
+    if (sharedBoardFile) {
+      formData.append('sharedBoard', sharedBoardFile.buffer, {
+        filename: sharedBoardFile.originalname || 'sharedBoard.jpg',
+        contentType: sharedBoardFile.mimetype,
+      });
+    }
+
+    const response = await this.api.post('/analyze', formData, {
+      headers: formData.getHeaders(),
+    });
+
+    return {
+      success: true,
+      message: 'Boards analyzed successfully',
+      data: response.data,
+    };
+  } catch (error: any) {
+    console.error('Board analysis failed:', error.message);
+
+    return {
+      success: false,
+      message:
+        error.response?.data?.message ||
+        error.message ||
+        'Failed to analyze boards',
+      data: null,
+    };
+   }
   }
 }
 

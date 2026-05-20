@@ -174,14 +174,25 @@ export default function HomeScreen() {
       );
 
       setAnalysisResults(result);
-
       if (result.success) {
-        const myBoardTiles = result.data?.myBoardDetections?.length || 0;
-        const sharedBoardTiles = result.data?.sharedBoardDetections?.length || 0;
-        Alert.alert(
-          'Analysis Complete',
-          `${result.message}\n\nMy Board: ${myBoardTiles} tiles\nShared Board: ${sharedBoardTiles} tiles`
-        );
+        const gameState = result.data?.gameState;
+        const rackRows = result.data?.rackRows;
+
+        if (!gameState) {
+          Alert.alert(
+            'Analysis Error',
+            'Vision did not return a valid game state'
+          );
+          return;
+        }
+
+        router.push({
+          pathname: '/(main)/review',
+          params: {
+            gameState: JSON.stringify(gameState),
+            rackRows: JSON.stringify(rackRows ?? []),
+          },
+        });
       } else {
         Alert.alert('Analysis Failed', result.message);
       }
