@@ -1,9 +1,6 @@
 import { Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
 import { visionService } from '../services/visionService';
-import { solveBestMove } from '../services/moveSolverService';
-import { detectionsToRack } from '../utils/rummikubConverters';
-import { GameState } from '../types/rummikub';
 
 /**
  * VisionController handles all vision-related requests from the mobile app.
@@ -58,39 +55,9 @@ export class VisionController {
       // Forward to vision service
       const result = await visionService.analyzeBoards(myBoardFile, sharedBoardFile);
 
-      // ── Move Solver ──────────────────────────────────────────────────────
-      // Convert detected tiles to game state and run the move solver.
-      //
-      // v1 assumptions:
-      //   - myBoardDetections → player's rack
-      //   - sharedBoardDetections are available but NOT yet grouped into
-      //     TileSets, so board is left empty for now.
-      //
-      // TODO: Once the vision service can group shared-board tiles into
-      //       discrete sets, pass them as board: TileSet[] here and the
-      //       extension-move logic in moveSolverService will activate.
-      let suggestedMove = undefined;
-      if (result.success) {
-        const rack = detectionsToRack(result.data.myBoardDetections);
-        const gameState: GameState = {
-          rack,
-          board: [], // TODO: populate from grouped sharedBoardDetections
-        };
-        suggestedMove = solveBestMove(gameState);
-        console.log(
-          `Move solver result for ${req.user!.email}: ${suggestedMove.explanation}`
-        );
-      }
-
       // Return appropriate status code
       const statusCode = result.success ? 200 : 400;
-      return res.status(statusCode).json({
-        ...result,
-        data: {
-          ...result.data,
-          suggestedMove,
-        },
-      });
+      return res.status(statusCode).json(result);
     } catch (error: any) {
       console.error('Vision analysis error:', error.message);
       return res.status(500).json({
