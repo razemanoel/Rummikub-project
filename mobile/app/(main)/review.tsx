@@ -7,7 +7,7 @@ import React, { useState, useEffect } from 'react';import {
   Pressable,
   Alert,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -88,20 +88,34 @@ const mockGameState: GameState = {
 
 export default function ReviewScreen() {
   const router = useRouter();
-  const [gameState, setGameState] = useState<GameState>(mockGameState);
+  const params = useLocalSearchParams();
 
-  const [editingTile, setEditingTile] = useState<Tile | null>(null);
-  const [editingLocation, setEditingLocation] = useState<
-    | { type: 'rack'; index: number }
-    | { type: 'board'; setIndex: number; tileIndex: number }
-    | null
-  >(null);
+const initialGameState: GameState = params.gameState
+  ? JSON.parse(params.gameState as string)
+  : mockGameState;
 
-  const [validationErrors, setValidationErrors] = useState<string[]>([]);
-  const [isValidating, setIsValidating] = useState(false);
-  const [invalidSetIndexes, setInvalidSetIndexes] = useState<number[]>([]);
-  const [invalidTileKeys, setInvalidTileKeys] = useState<string[]>([]);
-  const isGameStateValid = validationErrors.length === 0;
+const initialRackRows = params.rackRows
+  ? JSON.parse(params.rackRows as string)
+  : [];
+
+const [gameState, setGameState] = useState<GameState>(initialGameState);
+
+const [rackRows, setRackRows] = useState<any[][]>(initialRackRows);
+
+const [editingTile, setEditingTile] = useState<Tile | null>(null);
+
+const [editingLocation, setEditingLocation] = useState<
+  | { type: 'rack'; index: number }
+  | { type: 'board'; setIndex: number; tileIndex: number }
+  | null
+>(null);
+
+const [validationErrors, setValidationErrors] = useState<string[]>([]);
+const [isValidating, setIsValidating] = useState(false);
+const [invalidSetIndexes, setInvalidSetIndexes] = useState<number[]>([]);
+const [invalidTileKeys, setInvalidTileKeys] = useState<string[]>([]);
+
+const isGameStateValid = validationErrors.length === 0;
 
 
   const handleEditRackTile = (index: number) => {
@@ -272,19 +286,51 @@ export default function ReviewScreen() {
 
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Your Rack</Text>
-            <View style={styles.rackRow}>
-              {gameState.rack.map((tile, index) => (
-                <TileView
-                  key={index}
-                  tile={tile}
-                  isInvalid={
-                    tile.is_joker
-                      ? invalidTileKeys.includes('joker')
-                      : invalidTileKeys.includes(`${tile.value}-${tile.color}`)
-                  }
-                  onPress={() => handleEditRackTile(index)}
-                />
-              ))}
+
+            <View style={styles.rackContainer}>
+              {rackRows.length > 0 ? (
+                rackRows.map((row, rowIndex) => (
+                  <View key={rowIndex} style={styles.rackVisualRow}>
+                    {row.map((item: any, tileIndex: number) => {
+                      const tile = item.tile;
+
+                      const flatIndex = rackRows
+                        .slice(0, rowIndex)
+                        .reduce((sum, r) => sum + r.length, 0) + tileIndex;
+
+                      return (
+                        <TileView
+                          key={`${rowIndex}-${tileIndex}`}
+                          tile={tile}
+                          isInvalid={
+                            tile.is_joker
+                              ? invalidTileKeys.includes('joker')
+                              : invalidTileKeys.includes(
+                                  `${tile.value}-${tile.color}`
+                                )
+                          }
+                          onPress={() => handleEditRackTile(flatIndex)}
+                        />
+                      );
+                    })}
+                  </View>
+                ))
+              ) : (
+                <View style={styles.rackVisualRow}>
+                  {gameState.rack.map((tile, index) => (
+                    <TileView
+                      key={index}
+                      tile={tile}
+                      isInvalid={
+                        tile.is_joker
+                          ? invalidTileKeys.includes('joker')
+                          : invalidTileKeys.includes(`${tile.value}-${tile.color}`)
+                      }
+                      onPress={() => handleEditRackTile(index)}
+                    />
+                  ))}
+                </View>
+              )}
             </View>
           </View>
 
@@ -375,16 +421,16 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     marginBottom: 12,
   },
-  rackRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    columnGap: 2,
-    rowGap: 2,
-    backgroundColor: 'rgba(79, 141, 253, 0.08)',
+  rackContainer: {
+  backgroundColor: 'rgba(79, 141, 253, 0.08)',
     borderRadius: 14,
     padding: 14,
     borderWidth: 1,
     borderColor: 'rgba(79, 141, 253, 0.18)',
+  },
+  rackVisualRow: {
+    flexDirection: 'row',
+    marginBottom: 8,
   },
   confirmButton: {
     marginTop: 8,
