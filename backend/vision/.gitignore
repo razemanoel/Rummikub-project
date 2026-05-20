@@ -1,0 +1,52 @@
+# datasets
+classification_dataset/
+classification_dataset_split/
+
+detection_dataset/images/
+detection_dataset/labels/
+
+# trained / pretrained weights
+yolo*.pt
+
+# yolo outputs
+runs/
+
+# cache
+*.cache
+
+# python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# virtual environments
+.venv/
+venv/
+env/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# logs
+*.log
+
+# jupyter
+.ipynb_checkpoints/
+
+# pytest
+.pytest_cache/
+
+# torch / cuda temp
+*.tmp
+
+# build
+build/
+dist/
+
+# optional
+*.bak
