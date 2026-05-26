@@ -1,0 +1,51 @@
+services:
+  mongo:
+    image: mongo:7
+    container_name: rummikub-mongo
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+
+  python-backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: rummikub-python-backend
+    ports:
+      - "8000:8000"
+
+  node-api:
+    build:
+      context: ./backend/api
+      dockerfile: Dockerfile
+    container_name: rummikub-node-api
+    ports:
+      - "3000:3000"
+    env_file:
+      - ./backend/api/.env.docker
+    depends_on:
+      - mongo
+      - python-backend
+
+  mobile:
+    build:
+      context: ./mobile
+      dockerfile: Dockerfile
+    container_name: rummikub-mobile
+    ports:
+      - "8081:8081"
+      - "19000:19000"
+      - "19001:19001"
+      - "19002:19002"
+    env_file:
+      - ./mobile/.env
+    environment:
+      - REACT_NATIVE_PACKAGER_HOSTNAME=10.100.102.11
+    depends_on:
+      - node-api
+    stdin_open: true
+    tty: true
+
+volumes:
+  mongo_data:
