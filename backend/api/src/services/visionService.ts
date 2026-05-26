@@ -25,6 +25,73 @@ export interface VisionAnalysisResult {
   tiles: TileDetection[] | null;
 }
 
+export interface VisionFeedbackArtifactRequestCorrection {
+  feedbackHash: string;
+  tileIndex: number;
+  source: 'rack' | 'board';
+  correctionType:
+    | 'wrong_class'
+    | 'wrong_bbox'
+    | 'missing_tile'
+    | 'false_positive'
+    | 'added_tile'
+    | 'removed_tile'
+    | 'both';
+  affectsClassifier: boolean;
+  affectsDetector: boolean;
+  correctedTile: {
+    value: number | null;
+    color: string | null;
+    is_joker: boolean;
+  };
+  bbox: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  };
+}
+
+export interface VisionFeedbackArtifactRequestDetections {
+  rack?: Array<{
+    tileIndex: number;
+    bbox: {
+      x: number;
+      y: number;
+      width: number;
+      height: number;
+    };
+    correctedTile: {
+      value: number | null;
+      color: string | null;
+      is_joker: boolean;
+    };
+  }>;
+  board?: Array<{
+    tileIndex: number;
+    bbox: {
+      x: number;
+      y: number;
+      width: number;
+      height: number;
+    };
+    correctedTile: {
+      value: number | null;
+      color: string | null;
+      is_joker: boolean;
+    };
+  }>;
+}
+
+export interface FeedbackArtifactResult {
+  feedbackHash: string;
+  tileIndex: number;
+  source: 'rack' | 'board';
+  imageCropPath: string | null;
+  fullImagePath: string | null;
+  yoloLabelPath: string | null;
+}
+
 /**
  * Combined response returned to the mobile client
  */
@@ -45,6 +112,40 @@ class VisionService {
       baseURL: VISION_SERVER_URL,
       timeout: 60000, // Vision processing may take longer
     });
+  }
+
+  async generateFeedbackArtifacts(
+    corrections: VisionFeedbackArtifactRequestCorrection[],
+    finalImageDetections: VisionFeedbackArtifactRequestDetections,
+    rackImageFile?: MulterFile,
+    boardImageFile?: MulterFile
+  ): Promise<FeedbackArtifactResult[]> {
+    if (corrections.length === 0) {
+      return [];
+    }
+
+    const formData = new FormData();
+  formData.append('feedback', JSON.stringify({ corrections, finalImageDetections }));
+
+    if (rackImageFile) {
+      formData.append('rackImage', rackImageFile.buffer, {
+        filename: rackImageFile.originalname || 'rack-feedback.jpg',
+        contentType: rackImageFile.mimetype,
+      });
+    }
+
+    if (boardImageFile) {
+      formData.append('boardImage', boardImageFile.buffer, {
+        filename: boardImageFile.originalname || 'board-feedback.jpg',
+        contentType: boardImageFile.mimetype,
+      });
+    }
+
+    const response = await this.api.post('/feedback/artifacts', formData, {
+      headers: formData.getHeaders(),
+    });
+
+    return response.data.artifacts || [];
   }
 
   /**

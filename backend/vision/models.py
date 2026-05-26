@@ -1,5 +1,5 @@
 from enum import Enum
-from typing import List, Optional
+from typing import List, Literal, Optional
 from pydantic import BaseModel, Field, model_validator
 
 
@@ -82,3 +82,62 @@ class ClassifyFreeTilesResponse(BaseModel):
     status: str
     message: str
     tiles: Optional[List[FreeTileDetection]] = None
+
+
+class FeedbackBBox(BaseModel):
+    x: float = Field(ge=0)
+    y: float = Field(ge=0)
+    width: float = Field(gt=0)
+    height: float = Field(gt=0)
+
+
+class VisionFeedbackCorrectionType(str, Enum):
+    wrong_class = "wrong_class"
+    wrong_bbox = "wrong_bbox"
+    missing_tile = "missing_tile"
+    false_positive = "false_positive"
+    added_tile = "added_tile"
+    removed_tile = "removed_tile"
+    both = "both"
+
+
+class FeedbackFinalImageDetection(BaseModel):
+    tileIndex: int = Field(ge=0)
+    bbox: FeedbackBBox
+    correctedTile: Tile
+
+
+class FeedbackArtifactCorrection(BaseModel):
+    feedbackHash: str = Field(min_length=16, max_length=128)
+    tileIndex: int = Field(ge=0)
+    source: Literal["rack", "board"]
+    correctionType: VisionFeedbackCorrectionType
+    affectsClassifier: bool
+    affectsDetector: bool
+    correctedTile: Tile
+    bbox: FeedbackBBox
+
+
+class FeedbackSourceDetections(BaseModel):
+    rack: List[FeedbackFinalImageDetection] = Field(default_factory=list)
+    board: List[FeedbackFinalImageDetection] = Field(default_factory=list)
+
+
+class FeedbackArtifactRequest(BaseModel):
+    corrections: List[FeedbackArtifactCorrection]
+    finalImageDetections: FeedbackSourceDetections = Field(default_factory=FeedbackSourceDetections)
+
+
+class FeedbackArtifactResult(BaseModel):
+    feedbackHash: str
+    tileIndex: int
+    source: Literal["rack", "board"]
+    imageCropPath: Optional[str] = None
+    fullImagePath: Optional[str] = None
+    yoloLabelPath: Optional[str] = None
+
+
+class FeedbackArtifactResponse(BaseModel):
+    status: str
+    message: str
+    artifacts: List[FeedbackArtifactResult]
