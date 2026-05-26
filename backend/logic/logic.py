@@ -1,5 +1,5 @@
 from typing import List, Tuple
-from backend.vision.models import Tile, TileSet, GameState, InvalidSetInfo
+from backend.logic.models import Tile, TileSet, GameState, InvalidSetInfo
 
 
 def validate_set(tiles: List[Tile]) -> Tuple[bool, str]:

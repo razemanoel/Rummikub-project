@@ -615,6 +615,7 @@ const styles = StyleSheet.create({
   },
   rackVisualRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     marginBottom: 8,
   },
   confirmButton: {

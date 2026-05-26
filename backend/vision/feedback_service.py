@@ -8,7 +8,7 @@ from pydantic import ValidationError
 
 from backend.vision.classifier_service import CLASSIFIER_PATH
 from backend.vision.detector_service import DETECTOR_PATH
-from backend.vision.models import (
+from backend.logic.models import (
     FeedbackArtifactCorrection,
     FeedbackArtifactRequest,
     FeedbackArtifactResult,

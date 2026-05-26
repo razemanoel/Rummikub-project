@@ -4,15 +4,15 @@ from typing import Optional
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 
-from backend.vision.models import (
+from backend.logic.models import (
     BoardValidationRequest,
     BoardValidationResponse,
     FeedbackArtifactResponse,
     GameState,
     GameStateValidationResponse,
 )
-from backend.vision.logic import validate_board, validate_game_state
-from backend.vision.solver_ilp import solve_max_rack_tiles_ilp
+from backend.logic.logic import validate_board, validate_game_state
+from backend.logic.solver_ilp import solve_max_rack_tiles_ilp
 from backend.vision.vision_pipeline import analyze_image
 from backend.vision.feedback_service import (
     generate_feedback_artifacts,

@@ -1,6 +1,6 @@
 from typing import Any
 
-from backend.vision.models import Tile, TileSet, GameState, TileColor
+from backend.logic.models import Tile, TileSet, GameState, TileColor
 
 
 def dict_to_tile(tile_data: dict[str, Any]) -> Tile:

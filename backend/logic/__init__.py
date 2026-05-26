@@ -3,7 +3,7 @@ Rummikub Vision Service
 Computer vision module for tile detection and classification
 """
 
-from ..logic.models import (
+from .models import (
     TileColor,
     Tile,
     TileSet,
@@ -18,7 +18,7 @@ from ..logic.models import (
     ClassifyFreeTilesResponse,
 )
 
-from ..logic.logic import (
+from .logic import (
     validate_set,
     validate_board,
     validate_game_state,

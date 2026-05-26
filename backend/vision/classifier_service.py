@@ -7,7 +7,7 @@ import torch.nn as nn
 from PIL import Image
 from torchvision import models, transforms
 
-from backend.vision.models import TileColor
+from backend.logic.models import TileColor
 
 
 BASE_DIR = Path(__file__).resolve().parent
