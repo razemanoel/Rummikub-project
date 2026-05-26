@@ -1,4 +1,4 @@
-import { MongoClient, Db, Collection } from 'mongodb';
+import { MongoClient, Db } from 'mongodb';
 
 let client: MongoClient | null = null;
 let db: Db | null = null;
@@ -38,6 +38,17 @@ export async function initializeDatabase() {
     await failedAttemptsCollection.createIndex({ email: 1, attempted_at: -1 });
     await failedAttemptsCollection.createIndex({ ip_address: 1, attempted_at: -1 });
   }
+
+  if (!collectionNames.includes('vision_feedback')) {
+    await db.createCollection('vision_feedback');
+  }
+
+  const visionFeedbackCollection = db.collection('vision_feedback');
+  await visionFeedbackCollection.createIndex({ createdAt: -1 });
+  await visionFeedbackCollection.createIndex({ reviewed: 1, usedForTraining: 1 });
+  await visionFeedbackCollection.createIndex({ source: 1, correctionType: 1, createdAt: -1 });
+  await visionFeedbackCollection.createIndex({ classifierModelVersion: 1, detectorModelVersion: 1 });
+  await visionFeedbackCollection.createIndex({ feedbackHash: 1 }, { unique: true });
 
   console.log('MongoDB connected successfully');
 }

@@ -9,7 +9,12 @@ import {
   VerifyResetCodeRequest,
   ResetPasswordRequest,
 } from '@/types/auth';
-import { GameState, SolveILPResponse } from '@/types/rummikub';
+import {
+  GameState,
+  SolveILPResponse,
+  VisionAnalyzeResponse,
+  VisionFeedbackPayload,
+} from '@/types/rummikub';
 
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000/api';
 const TOKEN_KEY = 'rummikub_auth_token';
@@ -146,7 +151,7 @@ class ApiService {
 async analyzeBoards(
   myBoardUri?: string,
   sharedBoardUri?: string
-): Promise<ApiResponse> {
+): Promise<ApiResponse<VisionAnalyzeResponse>> {
   try {
     const formData = new FormData();
 
@@ -175,6 +180,49 @@ async analyzeBoards(
     }
 
     const response = await this.api.post('/vision/analyze', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+
+    return response.data;
+  } catch (error) {
+    return this.handleError(error);
+  }
+}
+
+async submitVisionFeedback(
+  feedbackPayload: VisionFeedbackPayload
+): Promise<ApiResponse<{ savedCount: number; skippedDuplicateCount: number }>> {
+  try {
+    const formData = new FormData();
+    const { sourceImages, ...payload } = feedbackPayload;
+
+    formData.append('feedback', JSON.stringify(payload));
+
+    const getMimeType = (uri: string) => {
+      if (uri.endsWith('.png')) return 'image/png';
+      if (uri.endsWith('.jpg') || uri.endsWith('.jpeg')) return 'image/jpeg';
+      return 'image/jpeg';
+    };
+
+    if (sourceImages?.rack) {
+      formData.append('rackImage', {
+        uri: sourceImages.rack,
+        type: getMimeType(sourceImages.rack),
+        name: 'rack-feedback.jpg',
+      } as any);
+    }
+
+    if (sourceImages?.board) {
+      formData.append('boardImage', {
+        uri: sourceImages.board,
+        type: getMimeType(sourceImages.board),
+        name: 'board-feedback.jpg',
+      } as any);
+    }
+
+    const response = await this.api.post('/vision/feedback', formData, {
       headers: {
         'Content-Type': 'multipart/form-data',
       },

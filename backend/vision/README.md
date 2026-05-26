@@ -41,6 +41,10 @@ vision/
 
 * `GET /health` - Service health status
 
+### Feedback Support
+
+* `POST /feedback/artifacts` - Generate classifier crops and detector image/YOLO-label artifacts for anonymized feedback
+
 ### Validation
 
 * `POST /validate-board` - Validate board sets
@@ -77,6 +81,95 @@ http://localhost:8000/docs
 ```
 
 Use Swagger to test the API directly from the browser.
+
+## Feedback Dataset Workflow
+
+The vision service supports an offline feedback-learning workflow without live retraining.
+
+### Feedback Artifact Generation
+
+The Node.js API can forward corrected detections and the original rack/board images to:
+
+```text
+POST /feedback/artifacts
+```
+
+The service will:
+
+* Validate each correction payload
+* Save classifier crops only for classifier-affecting corrections
+* Save detector images and YOLO labels only for detector-affecting corrections
+* Skip invalid or tiny crops
+* Save classifier crops under:
+
+```text
+feedback_dataset/classification/<class_name>/
+```
+
+Examples of `class_name`:
+
+```text
+joker
+red_8
+blue_12
+```
+
+* Save detector feedback under:
+
+```text
+feedback_dataset/detection/images/
+feedback_dataset/detection/labels/
+```
+
+Detector labels use single-class YOLO format with `class_id = 0` and normalized bounding boxes.
+Each detector label file represents the final corrected state of the image, not just one edited tile.
+
+### Exporting Feedback
+
+Use the export script to copy stored feedback artifacts into separate export directories:
+
+```bash
+python export_feedback_dataset.py --reviewed-only --unused-only
+```
+
+Optional flags:
+
+* `--mark-used` updates exported MongoDB records to `usedForTraining=true`
+* `--output-dir` changes the classifier export destination
+* `--detection-output-dir` changes the detector export destination
+* `--classifier-only` exports only classifier samples
+* `--detector-only` exports only detector samples
+
+### Retraining with Feedback
+
+Use the retraining script to combine the base classification dataset with collected feedback crops:
+
+```bash
+python retrain_classifier_with_feedback.py
+```
+
+This script:
+
+* Reads from `classification_dataset/` and `feedback_dataset/classification/`
+* Trains a separate model for evaluation
+* Saves the result as:
+
+```text
+models/tile_classifier_feedback.pth
+```
+
+The production classifier is not overwritten automatically.
+
+### Future Detector Retraining
+
+Detector feedback is exported as YOLO-compatible images and label files.
+Use the placeholder script below as the starting point for manual detector retraining:
+
+```bash
+python retrain_detector_with_feedback.py --help
+```
+
+This script does not retrain the production detector automatically.
 
 ## Game Logic
 

@@ -177,6 +177,10 @@ export default function HomeScreen() {
       if (result.success) {
         const gameState = result.data?.gameState;
         const rackRows = result.data?.rackRows;
+        const rackDetections = result.data?.rackDetections;
+        const boardDetections = result.data?.boardDetections;
+        const classifierModelVersion = result.data?.classifierModelVersion;
+        const detectorModelVersion = result.data?.detectorModelVersion;
 
         if (!gameState) {
           Alert.alert(
@@ -191,6 +195,12 @@ export default function HomeScreen() {
           params: {
             gameState: JSON.stringify(gameState),
             rackRows: JSON.stringify(rackRows ?? []),
+            rackDetections: JSON.stringify(rackDetections ?? []),
+            boardDetections: JSON.stringify(boardDetections ?? []),
+            rackImageUri: myBoardImages[0] ?? '',
+            boardImageUri: sharedBoardImages[0] ?? '',
+            classifierModelVersion: classifierModelVersion ?? '',
+            detectorModelVersion: detectorModelVersion ?? '',
           },
         });
       } else {

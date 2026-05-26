@@ -1,6 +1,8 @@
 # datasets
 classification_dataset/
 classification_dataset_split/
+feedback_dataset/
+exported_feedback_dataset/
 
 detection_dataset/images/
 detection_dataset/labels/

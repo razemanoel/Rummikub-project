@@ -59,6 +59,16 @@ router.post(
   VisionController.analyzeBoards as any
 );
 
+router.post(
+  '/feedback',
+  authMiddleware as any,
+  upload.fields([
+    { name: 'rackImage', maxCount: 1 },
+    { name: 'boardImage', maxCount: 1 },
+  ]),
+  VisionController.submitFeedback as any
+);
+
 /**
  * GET /api/vision/health
  * 

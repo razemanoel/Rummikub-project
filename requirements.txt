@@ -5,4 +5,5 @@ pytest
 opencv-python
 numpy
 python-multipart
+pymongo
 pulp

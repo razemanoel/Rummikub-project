@@ -1,6 +1,7 @@
 import { Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
 import { visionService } from '../services/visionService';
+import { visionFeedbackService } from '../services/visionFeedbackService';
 
 /**
  * VisionController handles all vision-related requests from the mobile app.
@@ -28,7 +29,7 @@ export class VisionController {
         });
       }
 
-      console.log(`User ${req.user.email} requesting board analysis`);
+      console.log('Authenticated vision analysis request received');
 
       // Get uploaded files from multer middleware
       const files = req.files as { [key: string]: any[] } | undefined;
@@ -82,6 +83,46 @@ export class VisionController {
       return res.status(500).json({
         success: false,
         message: 'Failed to check vision service health',
+      });
+    }
+  }
+
+  static async submitFeedback(req: AuthRequest, res: Response) {
+    try {
+      if (!req.user) {
+        return res.status(401).json({
+          success: false,
+          message: 'Unauthorized - valid token required',
+        });
+      }
+
+      const files = req.files as { [key: string]: any[] } | undefined;
+      const rackImageFile = files?.rackImage?.[0];
+      const boardImageFile = files?.boardImage?.[0];
+
+      const result = await visionFeedbackService.saveFeedback(
+        req.body.feedback,
+        rackImageFile,
+        boardImageFile
+      );
+
+      return res.status(201).json({
+        success: true,
+        message: 'Vision feedback saved successfully',
+        data: result,
+      });
+    } catch (error: any) {
+      const message = error.message || 'Failed to save vision feedback';
+      const statusCode =
+        message.includes('Feedback payload') || message.includes('corrections')
+          ? 400
+          : 500;
+
+      console.error('Vision feedback error:', message);
+
+      return res.status(statusCode).json({
+        success: false,
+        message,
       });
     }
   }

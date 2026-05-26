@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';import {
+import React, { useState, useEffect } from 'react';
+import {
   View,
   Text,
   StyleSheet,
@@ -11,11 +12,17 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 
-import { GameState } from '@/types/rummikub';
+import {
+  GameState,
+  Tile,
+  VisionDetection,
+  VisionFeedbackCorrection,
+  VisionFeedbackCorrectionType,
+  VisionFeedbackPayload,
+} from '@/types/rummikub';
 import TileView from '@/components/rummikub/TileView';
 import BoardView from '@/components/rummikub/BoardView';
 import EditTileModal from '@/components/rummikub/EditTileModal';
-import { Tile } from '@/types/rummikub';
 import { apiService } from '@/services/api';
 
 const mockGameState: GameState = {
@@ -98,9 +105,23 @@ const initialRackRows = params.rackRows
   ? JSON.parse(params.rackRows as string)
   : [];
 
+const initialRackDetections: VisionDetection[] = params.rackDetections
+  ? JSON.parse(params.rackDetections as string)
+  : [];
+
+const initialBoardDetections: VisionDetection[] = params.boardDetections
+  ? JSON.parse(params.boardDetections as string)
+  : [];
+
+const rackImageUri = (params.rackImageUri as string) || '';
+const boardImageUri = (params.boardImageUri as string) || '';
+const classifierModelVersion = (params.classifierModelVersion as string) || undefined;
+const detectorModelVersion = (params.detectorModelVersion as string) || undefined;
+
 const [gameState, setGameState] = useState<GameState>(initialGameState);
 
 const [rackRows, setRackRows] = useState<any[][]>(initialRackRows);
+const [corrections, setCorrections] = useState<Record<string, VisionFeedbackCorrection>>({});
 
 const [editingTile, setEditingTile] = useState<Tile | null>(null);
 
@@ -112,10 +133,122 @@ const [editingLocation, setEditingLocation] = useState<
 
 const [validationErrors, setValidationErrors] = useState<string[]>([]);
 const [isValidating, setIsValidating] = useState(false);
+const [isSubmitting, setIsSubmitting] = useState(false);
 const [invalidSetIndexes, setInvalidSetIndexes] = useState<number[]>([]);
 const [invalidTileKeys, setInvalidTileKeys] = useState<string[]>([]);
 
 const isGameStateValid = validationErrors.length === 0;
+
+  const detectorCorrectionTypes = new Set<VisionFeedbackCorrectionType>([
+    'wrong_bbox',
+    'missing_tile',
+    'false_positive',
+    'added_tile',
+    'removed_tile',
+    'both',
+  ]);
+
+  const areTilesEqual = (left: Tile, right: Tile) => (
+    left.value === right.value
+    && left.color === right.color
+    && left.is_joker === right.is_joker
+  );
+
+  const getCorrectionKey = (
+    location:
+      | { type: 'rack'; index: number }
+      | { type: 'board'; setIndex: number; tileIndex: number }
+  ) => (
+    location.type === 'rack'
+      ? `rack-${location.index}`
+      : `board-${location.setIndex}-${location.tileIndex}`
+  );
+
+  const buildBoardDetectionLookup = () => {
+    let cursor = 0;
+
+    return initialGameState.board.map((tileSet) =>
+      tileSet.tiles.map(() => initialBoardDetections[cursor++])
+    );
+  };
+
+  const boardDetectionLookup = buildBoardDetectionLookup();
+
+  const getOriginalDetection = (
+    location:
+      | { type: 'rack'; index: number }
+      | { type: 'board'; setIndex: number; tileIndex: number }
+  ): VisionDetection | undefined => {
+    if (location.type === 'rack') {
+      return initialRackDetections[location.index];
+    }
+
+    return boardDetectionLookup[location.setIndex]?.[location.tileIndex];
+  };
+
+  const getCurrentCorrectionsForSource = (source: 'rack' | 'board') => {
+    const detections = source === 'rack' ? initialRackDetections : initialBoardDetections;
+
+    // Detector feedback must describe the full corrected state of the image.
+    return detections.flatMap((detection) => {
+      const correction = Object.values(corrections).find(
+        (item) => item.source === source && item.tileIndex === detection.index
+      );
+
+      if (correction?.correctionType === 'false_positive' || correction?.correctionType === 'removed_tile') {
+        return [];
+      }
+
+      return [{
+        tileIndex: detection.index,
+        bbox: correction?.bbox || detection.bbox,
+        correctedTile: correction?.correctedTile || detection.originalPrediction,
+      }];
+    });
+  };
+
+  const buildSubmissionCorrections = (): VisionFeedbackCorrection[] => Object.values(corrections);
+
+  const buildFinalImageDetections = () => ({
+    rack: getCurrentCorrectionsForSource('rack'),
+    board: getCurrentCorrectionsForSource('board'),
+  });
+
+  const upsertCorrection = (
+    location:
+      | { type: 'rack'; index: number }
+      | { type: 'board'; setIndex: number; tileIndex: number },
+    updatedTile: Tile
+  ) => {
+    const originalDetection = getOriginalDetection(location);
+
+    if (!originalDetection) {
+      return;
+    }
+
+    const correctionKey = getCorrectionKey(location);
+
+    setCorrections((prev) => {
+      if (areTilesEqual(originalDetection.originalPrediction, updatedTile)) {
+        const next = { ...prev };
+        delete next[correctionKey];
+        return next;
+      }
+
+      return {
+        ...prev,
+        [correctionKey]: {
+          tileIndex: originalDetection.index,
+          source: originalDetection.source,
+          correctionType: 'wrong_class',
+          originalPrediction: originalDetection.originalPrediction,
+          correctedTile: updatedTile,
+          confidence: originalDetection.confidence,
+          bbox: originalDetection.bbox,
+        },
+      };
+    });
+  };
 
 
   const handleEditRackTile = (index: number) => {
@@ -130,6 +263,8 @@ const isGameStateValid = validationErrors.length === 0;
 
   const handleSaveTile = (updatedTile: Tile) => {
     if (!editingLocation) return;
+
+    upsertCorrection(editingLocation, updatedTile);
 
     setGameState((prev) => {
       const next: GameState = {
@@ -154,6 +289,24 @@ const isGameStateValid = validationErrors.length === 0;
 
   const handleDeleteTile = () => {
     if (!editingLocation) return;
+
+    const originalDetection = getOriginalDetection(editingLocation);
+
+    if (originalDetection) {
+      const correctionKey = getCorrectionKey(editingLocation);
+      setCorrections((prev) => ({
+        ...prev,
+        [correctionKey]: {
+          tileIndex: originalDetection.index,
+          source: originalDetection.source,
+          correctionType: 'false_positive',
+          originalPrediction: originalDetection.originalPrediction,
+          correctedTile: originalDetection.originalPrediction,
+          confidence: originalDetection.confidence,
+          bbox: originalDetection.bbox,
+        },
+      }));
+    }
 
     setGameState((prev) => {
       const next: GameState = {
@@ -246,6 +399,36 @@ const isGameStateValid = validationErrors.length === 0;
 
   const handleConfirm = async () => {
   try {
+    setIsSubmitting(true);
+
+    const correctionList = buildSubmissionCorrections();
+
+    if (correctionList.length > 0) {
+      const feedbackPayload: VisionFeedbackPayload = {
+        corrections: correctionList,
+        classifierModelVersion,
+        detectorModelVersion,
+        finalImageDetections: buildFinalImageDetections(),
+        sourceImages: {
+          rack: correctionList.some((item) => item.source === 'rack') ? rackImageUri : undefined,
+          board: correctionList.some((item) => item.source === 'board') ? boardImageUri : undefined,
+        },
+      };
+
+      const feedbackResponse = await apiService.submitVisionFeedback(feedbackPayload);
+
+      if (!feedbackResponse.success) {
+        console.warn('Vision feedback submission failed:', feedbackResponse.message);
+      } else if (feedbackResponse.data?.skippedDuplicateCount) {
+        console.log(
+          `Skipped ${feedbackResponse.data.skippedDuplicateCount} duplicate feedback sample(s)`
+        );
+      }
+    }
+
+    // TODO: When bbox editing or manual tile insertion is added, map those flows to
+    // wrong_bbox, missing_tile, added_tile, removed_tile, or both before submission.
+
     const response = await apiService.solveGameState(gameState);
 
     if (!response.success || !response.data) {
@@ -264,6 +447,8 @@ const isGameStateValid = validationErrors.length === 0;
     });
   } catch (error: any) {
     Alert.alert('Error', error.message || 'Failed to calculate solution');
+  } finally {
+    setIsSubmitting(false);
   }
 };
   
@@ -357,14 +542,14 @@ const isGameStateValid = validationErrors.length === 0;
           <Pressable
           style={[
             styles.confirmButton,
-            (!isGameStateValid || isValidating) && styles.confirmButtonDisabled,
+            (!isGameStateValid || isValidating || isSubmitting) && styles.confirmButtonDisabled,
           ]}
           onPress={handleConfirm}
-          disabled={!isGameStateValid || isValidating}
+          disabled={!isGameStateValid || isValidating || isSubmitting}
         >
           <Ionicons name="checkmark-circle" size={22} color="#ffffff" />
           <Text style={styles.confirmText}>
-            {isValidating ? 'Checking...' : 'Confirm and Solve'}
+            {isSubmitting ? 'Submitting...' : isValidating ? 'Checking...' : 'Confirm and Solve'}
           </Text>
         </Pressable>
         </ScrollView>

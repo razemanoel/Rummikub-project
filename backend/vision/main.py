@@ -2,17 +2,23 @@ import os
 import tempfile
 from typing import Optional
 
-from fastapi import FastAPI, File, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 
 from backend.vision.models import (
     BoardValidationRequest,
     BoardValidationResponse,
+    FeedbackArtifactResponse,
     GameState,
     GameStateValidationResponse,
 )
 from backend.vision.logic import validate_board, validate_game_state
 from backend.vision.solver_ilp import solve_max_rack_tiles_ilp
 from backend.vision.vision_pipeline import analyze_image
+from backend.vision.feedback_service import (
+    generate_feedback_artifacts,
+    get_model_versions,
+    parse_feedback_artifact_request,
+)
 from backend.vision.board_reconstructor import (
     build_game_state,
     sort_rack_detections,
@@ -34,6 +40,26 @@ def save_upload_to_temp_file(upload: UploadFile) -> str:
     with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as temp_file:
         temp_file.write(upload.file.read())
         return temp_file.name
+
+
+def xyxy_to_bbox(bbox: dict[str, float]) -> dict[str, float]:
+    return {
+        "x": round(float(bbox["x1"]), 2),
+        "y": round(float(bbox["y1"]), 2),
+        "width": round(float(bbox["x2"] - bbox["x1"]), 2),
+        "height": round(float(bbox["y2"] - bbox["y1"]), 2),
+    }
+
+
+def to_review_detection(detection: dict, source: str) -> dict:
+    return {
+        "index": detection["index"],
+        "source": source,
+        "tile": detection["tile"],
+        "originalPrediction": detection["tile"],
+        "confidence": detection["combined_confidence"],
+        "bbox": xyxy_to_bbox(detection["bbox"]),
+    }
 
 
 @app.post("/classify-tiles")
@@ -105,15 +131,19 @@ async def analyze_endpoint(
         return {
             "status": "success",
             "message": "Images analyzed successfully",
+            **get_model_versions(),
 
-            "rackDetections": rack_detections,
+            "rackDetections": [
+                to_review_detection(detection, "rack")
+                for detection in rack_detections
+            ],
 
             "rackRows": [
                 [
                     {
                         "tile": detection["tile"],
                         "class_name": detection["class_name"],
-                        "bbox": detection["bbox"],
+                        "bbox": xyxy_to_bbox(detection["bbox"]),
                         "confidence": detection["combined_confidence"],
                     }
                     for detection in row
@@ -121,7 +151,10 @@ async def analyze_endpoint(
                 for row in rack_rows
             ],
 
-            "boardDetections": board_detections,
+            "boardDetections": [
+                to_review_detection(detection, "board")
+                for detection in board_detections
+            ],
 
             "gameState": game_state.model_dump(mode="json"),
 
@@ -134,6 +167,48 @@ async def analyze_endpoint(
             },
         }
 
+    finally:
+        for path in temp_files:
+            if os.path.exists(path):
+                os.remove(path)
+
+
+@app.post("/feedback/artifacts", response_model=FeedbackArtifactResponse)
+async def feedback_artifacts_endpoint(
+    feedback: str = Form(...),
+    rackImage: Optional[UploadFile] = File(None),
+    boardImage: Optional[UploadFile] = File(None),
+):
+    temp_files = []
+
+    try:
+        try:
+            feedback_request = parse_feedback_artifact_request(feedback)
+        except ValueError as error:
+            raise HTTPException(status_code=400, detail=str(error)) from error
+
+        rack_image_path = None
+        board_image_path = None
+
+        if rackImage is not None:
+            rack_image_path = save_upload_to_temp_file(rackImage)
+            temp_files.append(rack_image_path)
+
+        if boardImage is not None:
+            board_image_path = save_upload_to_temp_file(boardImage)
+            temp_files.append(board_image_path)
+
+        artifacts = generate_feedback_artifacts(
+            feedback_request,
+            rack_image_path=rack_image_path,
+            board_image_path=board_image_path,
+        )
+
+        return FeedbackArtifactResponse(
+            status="success",
+            message="Feedback artifacts processed successfully",
+            artifacts=artifacts,
+        )
     finally:
         for path in temp_files:
             if os.path.exists(path):
