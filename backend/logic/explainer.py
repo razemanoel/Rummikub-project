@@ -1,7 +1,7 @@
 from collections import Counter
 from typing import List, Dict, Any, Tuple
 
-from backend.vision.models import Tile, GameState
+from backend.logic.models import Tile, GameState
 
 
 def explain_solution(game_state: GameState, solver_result: Dict[str, Any]) -> List[str]:

@@ -5,7 +5,7 @@ from PIL import Image
 
 from backend.vision.detector_service import detect_tiles
 from backend.vision.classifier_service import classify_tile_crop
-from backend.vision.models import Tile, TileColor
+from backend.logic.models import Tile, TileColor
 
 
 def crop_image_by_bbox(image: Image.Image, bbox: dict[str, float]) -> Image.Image:

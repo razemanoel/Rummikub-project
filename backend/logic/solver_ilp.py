@@ -4,8 +4,8 @@ from itertools import combinations
 import time
 
 import pulp
-from backend.vision.explainer import explain_solution, build_structured_steps
-from backend.vision.models import Tile, TileSet, GameState
+from backend.logic.explainer import explain_solution, build_structured_steps
+from backend.logic.models import Tile, TileSet, GameState
 
 
 ALL_COLORS = ["red", "blue", "yellow", "black"]
