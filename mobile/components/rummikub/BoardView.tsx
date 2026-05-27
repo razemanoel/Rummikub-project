@@ -1,11 +1,13 @@
 import React from 'react';
-import { View, StyleSheet } from 'react-native';
+import { View, StyleSheet, Pressable } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { TileSet } from '@/types/rummikub';
 import TileView from './TileView';
 
 interface Props {
   board: TileSet[];
   onTilePress?: (setIndex: number, tileIndex: number) => void;
+  onAddTileToSet?: (setIndex: number) => void;
   invalidSetIndexes?: number[];
   invalidTileKeys?: string[];
 }
@@ -13,6 +15,7 @@ interface Props {
 export default function BoardView({
   board,
   onTilePress,
+  onAddTileToSet,
   invalidSetIndexes = [],
   invalidTileKeys = [],
 }: Props) {
@@ -20,6 +23,7 @@ export default function BoardView({
     if (tile.is_joker) return 'joker';
     return `${tile.value}-${tile.color}`;
   };
+
   return (
     <View style={styles.boardContainer}>
       {board.map((tileSet, setIndex) => (
@@ -39,6 +43,15 @@ export default function BoardView({
               />
             </View>
           ))}
+
+          {onAddTileToSet && (
+            <Pressable
+              style={styles.addTileButton}
+              onPress={() => onAddTileToSet(setIndex)}
+            >
+              <Ionicons name="add" size={18} color="#ffffff" />
+            </Pressable>
+          )}
         </View>
       ))}
     </View>
@@ -58,6 +71,7 @@ const styles = StyleSheet.create({
   },
   setGroup: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     marginRight: 10,
     marginBottom: 10,
   },
@@ -70,5 +84,16 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     padding: 4,
     backgroundColor: 'rgba(239, 68, 68, 0.12)',
+  },
+  addTileButton: {
+    width: 34,
+    height: 64,
+    borderRadius: 7,
+    borderWidth: 1.5,
+    borderColor: 'rgba(255,255,255,0.35)',
+    backgroundColor: 'rgba(16, 185, 129, 0.65)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 3,
   },
 });
