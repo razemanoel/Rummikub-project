@@ -111,12 +111,6 @@ docker compose up
 
 ---
 
-# Stop All Containers
-
-```bash
-docker compose down
-```
-
 ---
 
 # Connect the Mobile App
@@ -149,20 +143,3 @@ No manual setup is required for:
 * npm start
 
 ---
-
-# Project Structure
-
-```text
-Rummikub-project/
-├── backend/
-│   ├── api/          # Node.js REST API
-│   ├── logic/        # Game validation & solver logic
-│   ├── vision/       # Image recognition pipeline
-│   ├── Dockerfile
-│   └── requirements.txt
-│
-├── mobile/           # Expo / React Native application
-│
-├── docker-compose.yml
-└── README.md
-```
