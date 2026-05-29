@@ -41,10 +41,10 @@ export interface VisionFeedbackCorrection {
   tileIndex: number;
   source: 'rack' | 'board';
   correctionType: VisionFeedbackCorrectionType;
-  originalPrediction: VisionPrediction;
+  originalPrediction?: VisionPrediction;
   correctedTile: Tile;
-  confidence: number;
-  bbox: VisionBBox;
+  confidence?: number;
+  bbox?: VisionBBox;
   finalImageDetections?: Array<{
     tileIndex: number;
     bbox: VisionBBox;

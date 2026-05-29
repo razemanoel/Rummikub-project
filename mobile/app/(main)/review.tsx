@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -15,10 +15,12 @@ import { Ionicons } from '@expo/vector-icons';
 import {
   GameState,
   Tile,
+  TileSet,
+  VisionBBox,
   VisionDetection,
   VisionFeedbackCorrection,
-  VisionFeedbackCorrectionType,
   VisionFeedbackPayload,
+  VisionPrediction,
 } from '@/types/rummikub';
 import TileView from '@/components/rummikub/TileView';
 import BoardView from '@/components/rummikub/BoardView';
@@ -93,6 +95,218 @@ const mockGameState: GameState = {
   ],
 };
 
+type ReviewTileSource = 'rack' | 'board';
+type ReviewTileOrigin = 'detected' | 'manual';
+
+interface ReviewTileState {
+  id: string;
+  feedbackTileIndex: number;
+  tile: Tile;
+  source: ReviewTileSource;
+  origin: ReviewTileOrigin;
+  isNew: boolean;
+  detectionIndex?: number;
+  originalPrediction?: VisionPrediction;
+  bbox?: VisionBBox;
+  confidence?: number;
+}
+
+interface ReviewTileSetState {
+  id: string;
+  tiles: ReviewTileState[];
+}
+
+type InitialRackRowItem = {
+  tile?: Tile;
+};
+
+type EditingLocation =
+  | { source: 'rack'; tileId: string }
+  | { source: 'board'; setId: string; tileId: string }
+  | null;
+
+const areTilesEqual = (left: Tile, right: Tile) => (
+  left.value === right.value
+  && left.color === right.color
+  && left.is_joker === right.is_joker
+);
+
+const isTile = (value: unknown): value is Tile => {
+  if (!value || typeof value !== 'object') {
+    return false;
+  }
+
+  return typeof (value as Tile).is_joker === 'boolean';
+};
+
+const isReviewTileState = (value: unknown): value is ReviewTileState => {
+  if (!value || typeof value !== 'object') {
+    return false;
+  }
+
+  const candidate = value as ReviewTileState;
+
+  return (
+    typeof candidate.id === 'string'
+    && typeof candidate.feedbackTileIndex === 'number'
+    && isTile(candidate.tile)
+    && (candidate.source === 'rack' || candidate.source === 'board')
+    && (candidate.origin === 'detected' || candidate.origin === 'manual')
+    && typeof candidate.isNew === 'boolean'
+  );
+};
+
+const sortTilesInSet = (tiles: ReviewTileState[]) => {
+  const jokers = tiles.filter((tile) => tile.tile.is_joker);
+  const normalTiles = tiles.filter((tile) => !tile.tile.is_joker);
+
+  const sameColor =
+    normalTiles.length > 0
+    && normalTiles.every((tile) => tile.tile.color === normalTiles[0].tile.color);
+
+  if (sameColor) {
+    return [
+      ...normalTiles.sort((left, right) => (left.tile.value || 0) - (right.tile.value || 0)),
+      ...jokers,
+    ];
+  }
+
+  return [
+    ...normalTiles.sort((left, right) => {
+      if ((left.tile.value || 0) !== (right.tile.value || 0)) {
+        return (left.tile.value || 0) - (right.tile.value || 0);
+      }
+
+      return String(left.tile.color).localeCompare(String(right.tile.color));
+    }),
+    ...jokers,
+  ];
+};
+
+const buildReviewTileState = (
+  tile: Tile,
+  source: ReviewTileSource,
+  feedbackTileIndex: number,
+  id: string,
+  detection?: VisionDetection,
+  isNew = false,
+): ReviewTileState => ({
+  id,
+  feedbackTileIndex,
+  tile,
+  source,
+  origin: detection ? 'detected' : 'manual',
+  isNew,
+  detectionIndex: detection?.index,
+  originalPrediction: detection?.originalPrediction,
+  bbox: detection?.bbox,
+  confidence: detection?.confidence,
+});
+
+const buildInitialRackReviewTiles = (
+  rack: Tile[],
+  rackRows: InitialRackRowItem[][],
+  rackDetections: VisionDetection[],
+): ReviewTileState[] => {
+  const rowTiles = rackRows.flatMap((row) => row.map((item) => item?.tile));
+  const sourceTiles = rowTiles.some((tile) => isTile(tile))
+    ? rowTiles.filter(isTile)
+    : rack.filter(isTile);
+
+  return sourceTiles.map((tile, index) => {
+  const detection = rackDetections[index];
+  const feedbackTileIndex = detection?.index ?? index;
+
+  return buildReviewTileState(
+    tile,
+    'rack',
+    feedbackTileIndex,
+    detection ? `rack-detected-${detection.index}` : `rack-initial-${index}`,
+    detection,
+  );
+  });
+};
+
+const buildInitialBoardReviewState = (
+  board: TileSet[],
+  boardDetections: VisionDetection[],
+): ReviewTileSetState[] => {
+  let detectionCursor = 0;
+
+  return board.map((tileSet, setIndex) => ({
+    id: `board-set-${setIndex}`,
+    tiles: tileSet.tiles.map((tile, tileIndex) => {
+      const detection = boardDetections[detectionCursor++];
+      const feedbackTileIndex = detection?.index ?? detectionCursor + tileIndex;
+
+      return buildReviewTileState(
+        tile,
+        'board',
+        feedbackTileIndex,
+        detection ? `board-detected-${detection.index}` : `board-initial-${setIndex}-${tileIndex}`,
+        detection,
+      );
+    }),
+  }));
+};
+
+const buildPlainGameState = (
+  rack: ReviewTileState[],
+  board: ReviewTileSetState[],
+): GameState => ({
+  rack: rack.map((item) => item.tile),
+  board: board.map((tileSet) => ({
+    tiles: tileSet.tiles.map((item) => item.tile),
+  })),
+});
+
+const buildRackDisplayRows = (
+  rack: ReviewTileState[],
+  initialRowLengths: number[],
+): ReviewTileState[][] => {
+  const normalizedRack = rack.filter(isReviewTileState);
+
+  if (normalizedRack.length === 0) {
+    return [[]];
+  }
+
+  if (initialRowLengths.length === 0) {
+    return [normalizedRack];
+  }
+
+  const rows: ReviewTileState[][] = [];
+  let cursor = 0;
+
+  initialRowLengths.forEach((rowLength, index) => {
+    const isLastConfiguredRow = index === initialRowLengths.length - 1;
+    const nextCursor = isLastConfiguredRow
+      ? normalizedRack.length
+      : Math.min(normalizedRack.length, cursor + rowLength);
+
+    const row = normalizedRack.slice(cursor, nextCursor);
+
+    if (row.length > 0 || isLastConfiguredRow) {
+      rows.push(row);
+    }
+
+    cursor = nextCursor;
+  });
+
+  if (cursor < normalizedRack.length) {
+    rows.push(normalizedRack.slice(cursor));
+  }
+
+  return rows.length > 0 ? rows : [[]];
+};
+
+const getTileKey = (tile: Tile) => {
+  if (tile.is_joker) {
+    return 'joker';
+  }
+
+  return `${tile.value}-${tile.color}`;
+};
+
 export default function ReviewScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
@@ -118,18 +332,15 @@ const boardImageUri = (params.boardImageUri as string) || '';
 const classifierModelVersion = (params.classifierModelVersion as string) || undefined;
 const detectorModelVersion = (params.detectorModelVersion as string) || undefined;
 
-const [gameState, setGameState] = useState<GameState>(initialGameState);
-
-const [rackRows, setRackRows] = useState<any[][]>(initialRackRows);
-const [corrections, setCorrections] = useState<Record<string, VisionFeedbackCorrection>>({});
-
-const [editingTile, setEditingTile] = useState<Tile | null>(null);
-
-const [editingLocation, setEditingLocation] = useState<
-  | { type: 'rack'; index: number }
-  | { type: 'board'; setIndex: number; tileIndex: number }
-  | null
->(null);
+const initialRackRowLengths = initialRackRows.map((row: unknown[]) => row.length);
+const [reviewRack, setReviewRack] = useState<ReviewTileState[]>(() =>
+  buildInitialRackReviewTiles(initialGameState.rack, initialRackRows, initialRackDetections)
+);
+const [reviewBoard, setReviewBoard] = useState<ReviewTileSetState[]>(() =>
+  buildInitialBoardReviewState(initialGameState.board, initialBoardDetections)
+);
+const [removedTiles, setRemovedTiles] = useState<ReviewTileState[]>([]);
+const [editingLocation, setEditingLocation] = useState<EditingLocation>(null);
 
 const [validationErrors, setValidationErrors] = useState<string[]>([]);
 const [isValidating, setIsValidating] = useState(false);
@@ -137,128 +348,157 @@ const [isSubmitting, setIsSubmitting] = useState(false);
 const [invalidSetIndexes, setInvalidSetIndexes] = useState<number[]>([]);
 const [invalidTileKeys, setInvalidTileKeys] = useState<string[]>([]);
 
+const nextManualFeedbackTileIndexRef = useRef({
+  rack: initialRackDetections.reduce((max, detection) => Math.max(max, detection.index), -1) + 1,
+  board: initialBoardDetections.reduce((max, detection) => Math.max(max, detection.index), -1) + 1,
+});
+const manualTileSerialRef = useRef(0);
+
+const gameState = useMemo(
+  () => buildPlainGameState(reviewRack, reviewBoard),
+  [reviewRack, reviewBoard],
+);
+const reviewRackRows = useMemo(
+  () => buildRackDisplayRows(reviewRack, initialRackRowLengths),
+  [initialRackRowLengths, reviewRack],
+);
+
+useEffect(() => {
+  const firstRowItem = reviewRackRows[0]?.[0];
+
+  if (firstRowItem) {
+    console.log('Review rack first row item shape:', {
+      id: firstRowItem.id,
+      source: firstRowItem.source,
+      origin: firstRowItem.origin,
+      hasTile: isTile(firstRowItem.tile),
+      tile: firstRowItem.tile,
+    });
+  }
+}, [reviewRackRows]);
+
+const editingReviewTile = useMemo(() => {
+  if (!editingLocation) {
+    return null;
+  }
+
+  if (editingLocation.source === 'rack') {
+    return reviewRack.find((tile) => tile.id === editingLocation.tileId) || null;
+  }
+
+  const boardSet = reviewBoard.find((tileSet) => tileSet.id === editingLocation.setId);
+  return boardSet?.tiles.find((tile) => tile.id === editingLocation.tileId) || null;
+}, [editingLocation, reviewBoard, reviewRack]);
+
 const isGameStateValid = validationErrors.length === 0;
 
-  const detectorCorrectionTypes = new Set<VisionFeedbackCorrectionType>([
-    'wrong_bbox',
-    'missing_tile',
-    'false_positive',
-    'added_tile',
-    'removed_tile',
-    'both',
-  ]);
+  const createManualReviewTile = (tile: Tile, source: ReviewTileSource): ReviewTileState => {
+    const feedbackTileIndex = nextManualFeedbackTileIndexRef.current[source];
+    nextManualFeedbackTileIndexRef.current[source] += 1;
+    manualTileSerialRef.current += 1;
 
-  const areTilesEqual = (left: Tile, right: Tile) => (
-    left.value === right.value
-    && left.color === right.color
-    && left.is_joker === right.is_joker
-  );
-
-  const getCorrectionKey = (
-    location:
-      | { type: 'rack'; index: number }
-      | { type: 'board'; setIndex: number; tileIndex: number }
-  ) => (
-    location.type === 'rack'
-      ? `rack-${location.index}`
-      : `board-${location.setIndex}-${location.tileIndex}`
-  );
-
-  const buildBoardDetectionLookup = () => {
-    let cursor = 0;
-
-    return initialGameState.board.map((tileSet) =>
-      tileSet.tiles.map(() => initialBoardDetections[cursor++])
+    return buildReviewTileState(
+      tile,
+      source,
+      feedbackTileIndex,
+      `${source}-manual-${manualTileSerialRef.current}`,
+      undefined,
+      true,
     );
   };
 
-  const boardDetectionLookup = buildBoardDetectionLookup();
+  const getCurrentDetectionsForSource = (source: ReviewTileSource) => {
+    const activeTiles = [
+      ...reviewRack,
+      ...reviewBoard.flatMap((tileSet) => tileSet.tiles),
+    ];
 
-  const getOriginalDetection = (
-    location:
-      | { type: 'rack'; index: number }
-      | { type: 'board'; setIndex: number; tileIndex: number }
-  ): VisionDetection | undefined => {
-    if (location.type === 'rack') {
-      return initialRackDetections[location.index];
-    }
-
-    return boardDetectionLookup[location.setIndex]?.[location.tileIndex];
+    return activeTiles
+      .filter((tile) => tile.source === source && tile.origin === 'detected' && tile.detectionIndex !== undefined && tile.bbox)
+      .map((tile) => ({
+        tileIndex: tile.detectionIndex as number,
+        bbox: tile.bbox as VisionBBox,
+        correctedTile: tile.tile,
+      }))
+      .sort((left, right) => left.tileIndex - right.tileIndex);
   };
 
-  const getCurrentCorrectionsForSource = (source: 'rack' | 'board') => {
-    const detections = source === 'rack' ? initialRackDetections : initialBoardDetections;
+  const buildSubmissionCorrections = (): VisionFeedbackCorrection[] => {
+    const activeTiles = [
+      ...reviewRack,
+      ...reviewBoard.flatMap((tileSet) => tileSet.tiles),
+    ];
 
-    // Detector feedback must describe the full corrected state of the image.
-    return detections.flatMap((detection) => {
-      const correction = Object.values(corrections).find(
-        (item) => item.source === source && item.tileIndex === detection.index
-      );
+    const activeCorrections: VisionFeedbackCorrection[] = activeTiles.flatMap<VisionFeedbackCorrection>((tile) => {
+      if (tile.origin === 'manual') {
+        if (!tile.isNew) {
+          return [];
+        }
 
-      if (correction?.correctionType === 'false_positive' || correction?.correctionType === 'removed_tile') {
+        return [{
+            tileIndex: tile.feedbackTileIndex,
+          source: tile.source,
+          correctionType: 'added_tile' as const,
+          correctedTile: tile.tile,
+        }];
+      }
+
+      if (!tile.originalPrediction || tile.detectionIndex === undefined || tile.confidence === undefined || !tile.bbox) {
+        return [];
+      }
+
+      if (areTilesEqual(tile.originalPrediction, tile.tile)) {
         return [];
       }
 
       return [{
-        tileIndex: detection.index,
-        bbox: correction?.bbox || detection.bbox,
-        correctedTile: correction?.correctedTile || detection.originalPrediction,
+        tileIndex: tile.detectionIndex,
+        source: tile.source,
+        correctionType: 'wrong_class' as const,
+        originalPrediction: tile.originalPrediction,
+        correctedTile: tile.tile,
+        confidence: tile.confidence,
+        bbox: tile.bbox,
       }];
     });
-  };
 
-  const buildSubmissionCorrections = (): VisionFeedbackCorrection[] => Object.values(corrections);
-
-  const buildFinalImageDetections = () => ({
-    rack: getCurrentCorrectionsForSource('rack'),
-    board: getCurrentCorrectionsForSource('board'),
-  });
-
-  const upsertCorrection = (
-    location:
-      | { type: 'rack'; index: number }
-      | { type: 'board'; setIndex: number; tileIndex: number },
-    updatedTile: Tile
-  ) => {
-    const originalDetection = getOriginalDetection(location);
-
-    if (!originalDetection) {
-      return;
-    }
-
-    const correctionKey = getCorrectionKey(location);
-
-    setCorrections((prev) => {
-      if (areTilesEqual(originalDetection.originalPrediction, updatedTile)) {
-        const next = { ...prev };
-        delete next[correctionKey];
-        return next;
+    const removedCorrections: VisionFeedbackCorrection[] = removedTiles.flatMap<VisionFeedbackCorrection>((tile) => {
+      if (!tile.originalPrediction || tile.detectionIndex === undefined || tile.confidence === undefined || !tile.bbox) {
+        return [];
       }
 
-      return {
-        ...prev,
-        [correctionKey]: {
-          tileIndex: originalDetection.index,
-          source: originalDetection.source,
-          correctionType: 'wrong_class',
-          originalPrediction: originalDetection.originalPrediction,
-          correctedTile: updatedTile,
-          confidence: originalDetection.confidence,
-          bbox: originalDetection.bbox,
-        },
-      };
+      return [{
+        tileIndex: tile.detectionIndex,
+        source: tile.source,
+        correctionType: 'false_positive' as const,
+        originalPrediction: tile.originalPrediction,
+        correctedTile: tile.originalPrediction,
+        confidence: tile.confidence,
+        bbox: tile.bbox,
+      }];
     });
+
+    return [...activeCorrections, ...removedCorrections];
   };
 
+  const buildFinalImageDetections = () => ({
+    rack: getCurrentDetectionsForSource('rack'),
+    board: getCurrentDetectionsForSource('board'),
+  });
 
-  const handleEditRackTile = (index: number) => {
-    setEditingTile(gameState.rack[index]);
-    setEditingLocation({ type: 'rack', index });
+  const handleEditRackTile = (tileId: string) => {
+    setEditingLocation({ source: 'rack', tileId });
   };
 
   const handleEditBoardTile = (setIndex: number, tileIndex: number) => {
-    setEditingTile(gameState.board[setIndex].tiles[tileIndex]);
-    setEditingLocation({ type: 'board', setIndex, tileIndex });
+    const tileSet = reviewBoard[setIndex];
+    const tile = tileSet?.tiles[tileIndex];
+
+    if (!tile || !tileSet) {
+      return;
+    }
+
+    setEditingLocation({ source: 'board', setId: tileSet.id, tileId: tile.id });
   };
 
   const defaultNewTile: Tile = {
@@ -268,202 +508,90 @@ const isGameStateValid = validationErrors.length === 0;
   };
 
   const handleAddTileToBoardSet = (setIndex: number) => {
-    const newTile = { ...defaultNewTile };
+    const tileSet = reviewBoard[setIndex];
 
-    setGameState((prev) => ({
-      ...prev,
-      board: prev.board.map((tileSet, index) =>
-        index === setIndex
-          ? { tiles: [...tileSet.tiles, newTile] }
-          : tileSet
-      ),
-    }));
-
-    setEditingTile(newTile);
-    setEditingLocation({
-      type: 'board',
-      setIndex,
-      tileIndex: gameState.board[setIndex].tiles.length,
-    });
-  };
-
-  const sortTilesInSet = (tiles: Tile[]) => {
-    const jokers = tiles.filter((tile) => tile.is_joker);
-    const normalTiles = tiles.filter((tile) => !tile.is_joker);
-
-    const sameColor =
-      normalTiles.length > 0 &&
-      normalTiles.every((tile) => tile.color === normalTiles[0].color);
-
-    if (sameColor) {
-      return [
-        ...normalTiles.sort((a, b) => (a.value || 0) - (b.value || 0)),
-        ...jokers,
-      ];
+    if (!tileSet) {
+      return;
     }
 
-    return [
-      ...normalTiles.sort((a, b) => {
-        if ((a.value || 0) !== (b.value || 0)) {
-          return (a.value || 0) - (b.value || 0);
-        }
+    const newTile = createManualReviewTile({ ...defaultNewTile }, 'board');
 
-        return String(a.color).localeCompare(String(b.color));
-      }),
-      ...jokers,
-    ];
+    setReviewBoard((prev) => prev.map((item) => (
+      item.id === tileSet.id
+        ? { ...item, tiles: sortTilesInSet([...item.tiles, newTile]) }
+        : item
+    )));
+
+    setEditingLocation({
+      source: 'board',
+      setId: tileSet.id,
+      tileId: newTile.id,
+    });
   };
 
   const handleSaveTile = (updatedTile: Tile) => {
     if (!editingLocation) return;
 
-    upsertCorrection(editingLocation, updatedTile);
+    if (editingLocation.source === 'rack') {
+      setReviewRack((prev) => prev.map((tile) => (
+        tile.id === editingLocation.tileId
+          ? { ...tile, tile: updatedTile }
+          : tile
+      )));
+    } else {
+      setReviewBoard((prev) => prev.map((tileSet) => {
+        if (tileSet.id !== editingLocation.setId) {
+          return tileSet;
+        }
 
-    setGameState((prev) => {
-      const next: GameState = {
-        rack: [...prev.rack],
-        board: prev.board.map((set) => ({
-          tiles: [...set.tiles],
-        })),
-      };
-
-      if (editingLocation.type === 'rack') {
-        next.rack[editingLocation.index] = updatedTile;
-      } else {
-        next.board[editingLocation.setIndex].tiles[
-          editingLocation.tileIndex
-        ] = updatedTile;
-
-        next.board[editingLocation.setIndex].tiles = sortTilesInSet(
-          next.board[editingLocation.setIndex].tiles
-        );
-      }
-
-      return next;
-    });
-
-    if (editingLocation.type === 'rack') {
-      setRackRows((prevRows) => {
-        if (prevRows.length === 0) return prevRows;
-
-        let currentFlatIndex = 0;
-
-        return prevRows.map((row) =>
-          row.map((item) => {
-            if (currentFlatIndex === editingLocation.index) {
-              currentFlatIndex++;
-
-              return {
-                ...item,
-                tile: updatedTile,
-              };
-            }
-
-            currentFlatIndex++;
-            return item;
-          })
-        );
-      });
+        return {
+          ...tileSet,
+          tiles: sortTilesInSet(tileSet.tiles.map((tile) => (
+            tile.id === editingLocation.tileId
+              ? { ...tile, tile: updatedTile }
+              : tile
+          ))),
+        };
+      }));
     }
 
-    setEditingTile(null);
     setEditingLocation(null);
   };
 
   const handleDeleteTile = () => {
     if (!editingLocation) return;
 
-    const originalDetection = getOriginalDetection(editingLocation);
+    const tileToRemove = editingReviewTile;
 
-    if (originalDetection) {
-      const correctionKey = getCorrectionKey(editingLocation);
-
-      setCorrections((prev) => ({
-        ...prev,
-        [correctionKey]: {
-          tileIndex: originalDetection.index,
-          source: originalDetection.source,
-          correctionType: 'false_positive',
-          originalPrediction: originalDetection.originalPrediction,
-          correctedTile: originalDetection.originalPrediction,
-          confidence: originalDetection.confidence,
-          bbox: originalDetection.bbox,
-        },
-      }));
+    if (!tileToRemove) {
+      setEditingLocation(null);
+      return;
     }
 
-    setGameState((prev) => {
-      const next: GameState = {
-        rack: [...prev.rack],
-        board: prev.board.map((set) => ({
-          tiles: [...set.tiles],
-        })),
-      };
-
-      if (editingLocation.type === 'rack') {
-        next.rack.splice(editingLocation.index, 1);
-      } else {
-        next.board[editingLocation.setIndex].tiles.splice(
-          editingLocation.tileIndex,
-          1
-        );
-      }
-
-      return next;
-    });
-
-    if (editingLocation.type === 'rack') {
-      setRackRows((prevRows) => {
-        if (prevRows.length === 0) return prevRows;
-
-        let currentFlatIndex = 0;
-
-        return prevRows
-          .map((row) =>
-            row.filter(() => {
-              const shouldKeep =
-                currentFlatIndex !== editingLocation.index;
-
-              currentFlatIndex++;
-
-              return shouldKeep;
-            })
-          )
-          .filter((row) => row.length > 0);
-      });
+    if (tileToRemove.origin === 'detected') {
+      setRemovedTiles((prev) => [...prev.filter((item) => item.id !== tileToRemove.id), tileToRemove]);
     }
 
-    setEditingTile(null);
+    if (editingLocation.source === 'rack') {
+      setReviewRack((prev) => prev.filter((tile) => tile.id !== editingLocation.tileId));
+    } else {
+      setReviewBoard((prev) => prev.map((tileSet) => (
+        tileSet.id === editingLocation.setId
+          ? { ...tileSet, tiles: tileSet.tiles.filter((tile) => tile.id !== editingLocation.tileId) }
+          : tileSet
+      )));
+    }
+
     setEditingLocation(null);
   };
 
   const handleAddRackTile = () => {
-    const newTile = { ...defaultNewTile };
+    const newTile = createManualReviewTile({ ...defaultNewTile }, 'rack');
 
-    setGameState((prev) => ({
-      ...prev,
-      rack: [...prev.rack, newTile],
-    }));
-
-    setRackRows((prevRows) => {
-      if (prevRows.length === 0) return prevRows;
-
-      const nextRows = prevRows.map((row) => [...row]);
-
-      const lastRowIndex = nextRows.length - 1;
-
-      nextRows[lastRowIndex].push({
-        tile: newTile,
-      });
-
-      return nextRows;
-    });
-
-    setEditingTile(newTile);
-
+    setReviewRack((prev) => [...prev, newTile]);
     setEditingLocation({
-      type: 'rack',
-      index: gameState.rack.length,
+      source: 'rack',
+      tileId: newTile.id,
     });
   };
 
@@ -490,7 +618,7 @@ const isGameStateValid = validationErrors.length === 0;
       const errors =
         invalidSets.map((item: any) =>
           item.index >= 0
-            ? `Invalid set: ${gameState.board[item.index]?.tiles
+            ? `Invalid set: ${stateToValidate.board[item.index]?.tiles
                 .map((tile) =>
                   tile.is_joker ? 'joker' : `${tile.value} ${tile.color}`
                 )
@@ -564,9 +692,6 @@ const isGameStateValid = validationErrors.length === 0;
       }
     }
 
-    // TODO: When bbox editing or manual tile insertion is added, map those flows to
-    // wrong_bbox, missing_tile, added_tile, removed_tile, or both before submission.
-
     const response = await apiService.solveGameState(gameState);
 
     if (!response.success || !response.data) {
@@ -611,32 +736,27 @@ const isGameStateValid = validationErrors.length === 0;
             <Text style={styles.sectionTitle}>Your Rack</Text>
 
             <View style={styles.rackContainer}>
-              {rackRows.length > 0 ? (
-                rackRows.map((row, rowIndex) => (
+              {reviewRackRows.length > 0 ? (
+                reviewRackRows.map((row, rowIndex) => (
                   <View key={rowIndex} style={styles.rackVisualRow}>
-                    {row.map((item: any, tileIndex: number) => {
-                      const tile = item.tile;
-
-                      const flatIndex = rackRows
-                        .slice(0, rowIndex)
-                        .reduce((sum, r) => sum + r.length, 0) + tileIndex;
+                    {row.map((tile) => {
 
                       return (
                         <TileView
-                          key={`${rowIndex}-${tileIndex}`}
-                          tile={tile}
+                          key={tile.id}
+                          tile={tile.tile}
                           isInvalid={
-                            tile.is_joker
+                            tile.tile.is_joker
                               ? invalidTileKeys.includes('joker')
                               : invalidTileKeys.includes(
-                                  `${tile.value}-${tile.color}`
+                                  `${tile.tile.value}-${tile.tile.color}`
                                 )
                           }
-                          onPress={() => handleEditRackTile(flatIndex)}
+                          onPress={() => handleEditRackTile(tile.id)}
                         />
                       );
                     })}
-                    {rowIndex === rackRows.length - 1 && (
+                    {rowIndex === reviewRackRows.length - 1 && (
                       <Pressable style={styles.addTileButton} onPress={handleAddRackTile}>
                         <Ionicons name="add" size={18} color="#ffffff" />
                       </Pressable>
@@ -645,16 +765,16 @@ const isGameStateValid = validationErrors.length === 0;
                 ))
               ) : (
                 <View style={styles.rackVisualRow}>
-                  {gameState.rack.map((tile, index) => (
+                  {reviewRack.map((tile) => (
                     <TileView
-                      key={index}
-                      tile={tile}
+                      key={tile.id}
+                      tile={tile.tile}
                       isInvalid={
-                        tile.is_joker
+                        tile.tile.is_joker
                           ? invalidTileKeys.includes('joker')
-                          : invalidTileKeys.includes(`${tile.value}-${tile.color}`)
+                          : invalidTileKeys.includes(getTileKey(tile.tile))
                       }
-                      onPress={() => handleEditRackTile(index)}
+                      onPress={() => handleEditRackTile(tile.id)}
                     />
                   ))}
                   <Pressable style={styles.addTileButton} onPress={handleAddRackTile}>
@@ -702,10 +822,9 @@ const isGameStateValid = validationErrors.length === 0;
         </ScrollView>
       </SafeAreaView>
       <EditTileModal
-      visible={!!editingTile}
-      tile={editingTile}
+      visible={!!editingReviewTile}
+      tile={editingReviewTile?.tile || null}
       onClose={() => {
-        setEditingTile(null);
         setEditingLocation(null);
       }}
       onSave={handleSaveTile}

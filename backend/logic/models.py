@@ -115,7 +115,7 @@ class FeedbackArtifactCorrection(BaseModel):
     affectsClassifier: bool
     affectsDetector: bool
     correctedTile: Tile
-    bbox: FeedbackBBox
+    bbox: Optional[FeedbackBBox] = None
 
 
 class FeedbackSourceDetections(BaseModel):

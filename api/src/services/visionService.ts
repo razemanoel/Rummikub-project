@@ -44,12 +44,12 @@ export interface VisionFeedbackArtifactRequestCorrection {
     color: string | null;
     is_joker: boolean;
   };
-  bbox: {
+  bbox?: {
     x: number;
     y: number;
     width: number;
     height: number;
-  };
+  } | null;
 }
 
 export interface VisionFeedbackArtifactRequestDetections {

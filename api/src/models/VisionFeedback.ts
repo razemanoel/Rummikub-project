@@ -32,10 +32,10 @@ export interface VisionFeedbackCorrectionInput {
   tileIndex: number;
   source: VisionFeedbackSource;
   correctionType: VisionFeedbackCorrectionType;
-  originalPrediction: VisionFeedbackTile;
+  originalPrediction?: VisionFeedbackTile;
   correctedTile: VisionFeedbackTile;
-  confidence: number;
-  bbox: VisionFeedbackBBox;
+  confidence?: number;
+  bbox?: VisionFeedbackBBox;
   finalImageDetections?: Array<{
     tileIndex: number;
     bbox: VisionFeedbackBBox;
@@ -67,9 +67,9 @@ export interface VisionFeedbackRecord {
   _id?: ObjectId;
   source: VisionFeedbackSource;
   correctionType: VisionFeedbackCorrectionType;
-  originalPrediction: VisionFeedbackPrediction;
+  originalPrediction: VisionFeedbackPrediction | null;
   correctedTile: VisionFeedbackTile;
-  bbox: VisionFeedbackBBox;
+  bbox: VisionFeedbackBBox | null;
   affectsClassifier: boolean;
   affectsDetector: boolean;
   imageCropPath: string | null;

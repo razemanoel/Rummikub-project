@@ -36,10 +36,10 @@ interface SanitizedCorrection {
   tileIndex: number;
   source: 'rack' | 'board';
   correctionType: VisionFeedbackCorrectionType;
-  originalPrediction: VisionFeedbackTile;
+  originalPrediction: VisionFeedbackTile | null;
   correctedTile: VisionFeedbackTile;
-  confidence: number;
-  bbox: VisionFeedbackBBox;
+  confidence: number | null;
+  bbox: VisionFeedbackBBox | null;
   finalImageDetections: Array<{
     tileIndex: number;
     bbox: VisionFeedbackBBox;
@@ -224,21 +224,31 @@ class VisionFeedbackService {
 
   private deriveEffects(
     correctionType: VisionFeedbackCorrectionType,
-    originalPrediction: VisionFeedbackTile,
-    correctedTile: VisionFeedbackTile
+    originalPrediction: VisionFeedbackTile | null,
+    correctedTile: VisionFeedbackTile,
+    bbox: VisionFeedbackBBox | null,
   ): { affectsClassifier: boolean; affectsDetector: boolean } {
-    const tileChanged = !this.tilesEqual(originalPrediction, correctedTile);
+    const tileChanged = originalPrediction
+      ? !this.tilesEqual(originalPrediction, correctedTile)
+      : true;
 
     switch (correctionType) {
       case 'wrong_class':
-        return { affectsClassifier: tileChanged, affectsDetector: false };
+        return { affectsClassifier: Boolean(originalPrediction && bbox && tileChanged), affectsDetector: false };
       case 'wrong_bbox':
-        return { affectsClassifier: tileChanged, affectsDetector: true };
+        return {
+          affectsClassifier: Boolean(originalPrediction && bbox && tileChanged),
+          affectsDetector: Boolean(bbox),
+        };
       case 'both':
-        return { affectsClassifier: tileChanged, affectsDetector: true };
+        return {
+          affectsClassifier: Boolean(originalPrediction && bbox && tileChanged),
+          affectsDetector: Boolean(bbox),
+        };
       case 'missing_tile':
-      case 'false_positive':
       case 'added_tile':
+        return { affectsClassifier: false, affectsDetector: Boolean(bbox) };
+      case 'false_positive':
       case 'removed_tile':
         return { affectsClassifier: false, affectsDetector: true };
       default:
@@ -248,7 +258,7 @@ class VisionFeedbackService {
 
   private isMeaningfulCorrection(
     correctionType: VisionFeedbackCorrectionType,
-    originalPrediction: VisionFeedbackTile,
+    originalPrediction: VisionFeedbackTile | null,
     correctedTile: VisionFeedbackTile,
     finalImageDetections: Array<{
       tileIndex: number;
@@ -256,11 +266,13 @@ class VisionFeedbackService {
       correctedTile: VisionFeedbackTile;
     }>
   ): boolean {
-    const tileChanged = !this.tilesEqual(originalPrediction, correctedTile);
+    const tileChanged = originalPrediction
+      ? !this.tilesEqual(originalPrediction, correctedTile)
+      : true;
 
     switch (correctionType) {
       case 'wrong_class':
-        return tileChanged;
+        return Boolean(originalPrediction) && tileChanged;
       case 'wrong_bbox':
       case 'both':
         return tileChanged || finalImageDetections.length > 0;
@@ -281,6 +293,7 @@ class VisionFeedbackService {
       originalPrediction: correction.originalPrediction,
       correctedTile: correction.correctedTile,
       bbox: correction.bbox,
+      confidence: correction.confidence,
       finalImageDetections: correction.finalImageDetections,
       classifierModelVersion: correction.classifierModelVersion,
       detectorModelVersion: correction.detectorModelVersion,
@@ -317,6 +330,8 @@ class VisionFeedbackService {
       const correctionLevelFinalImageDetections = this.sanitizeFinalImageDetections(
         (correction as { finalImageDetections?: unknown }).finalImageDetections
       );
+      const requiresDetectionMetadata = correctionType !== 'added_tile';
+      const hasValidConfidence = Number.isFinite(confidence) && confidence >= 0 && confidence <= 1;
 
       if (
         !Number.isInteger(tileIndex)
@@ -325,12 +340,8 @@ class VisionFeedbackService {
         || !ALLOWED_SOURCES.has(source)
         || typeof correctionType !== 'string'
         || !ALLOWED_CORRECTION_TYPES.has(correctionType as VisionFeedbackCorrectionType)
-        || !Number.isFinite(confidence)
-        || confidence < 0
-        || confidence > 1
-        || !originalPrediction
         || !correctedTile
-        || !bbox
+        || (requiresDetectionMetadata && (!hasValidConfidence || !originalPrediction || !bbox))
       ) {
         return [];
       }
@@ -352,7 +363,8 @@ class VisionFeedbackService {
       const effects = this.deriveEffects(
         correctionType as VisionFeedbackCorrectionType,
         originalPrediction,
-        correctedTile
+        correctedTile,
+        bbox,
       );
 
       if (effects.affectsDetector && finalImageDetections.length === 0) {
@@ -365,7 +377,7 @@ class VisionFeedbackService {
         correctionType: correctionType as VisionFeedbackCorrectionType,
         originalPrediction,
         correctedTile,
-        confidence: Math.round(confidence * 10000) / 10000,
+        confidence: hasValidConfidence ? Math.round(confidence * 10000) / 10000 : null,
         bbox,
         finalImageDetections,
         affectsClassifier: effects.affectsClassifier,
@@ -397,7 +409,7 @@ class VisionFeedbackService {
       affectsClassifier: correction.affectsClassifier,
       affectsDetector: correction.affectsDetector,
       correctedTile: correction.correctedTile,
-      bbox: correction.bbox,
+      bbox: correction.bbox || null,
     };
   }
 
@@ -455,7 +467,7 @@ class VisionFeedbackService {
             { projection: { feedbackHash: 1 } }
           )
           .toArray()
-      ).map((item) => item.feedbackHash)
+      ).map((item: Pick<VisionFeedbackRecord, 'feedbackHash'>) => item.feedbackHash)
     );
 
     skippedDuplicateCount += existingHashes.size;
@@ -488,12 +500,14 @@ class VisionFeedbackService {
       return {
       source: correction.source,
       correctionType: correction.correctionType,
-      originalPrediction: {
-        ...correction.originalPrediction,
-        confidence: correction.confidence,
-      },
+      originalPrediction: correction.originalPrediction
+        ? {
+            ...correction.originalPrediction,
+            confidence: correction.confidence ?? 0,
+          }
+        : null,
       correctedTile: correction.correctedTile,
-      bbox: correction.bbox,
+      bbox: correction.bbox || null,
       affectsClassifier: correction.affectsClassifier,
       affectsDetector: correction.affectsDetector,
       imageCropPath: artifact?.imageCropPath || null,

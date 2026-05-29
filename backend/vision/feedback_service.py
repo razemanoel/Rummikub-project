@@ -75,6 +75,9 @@ def save_feedback_crop_for_correction(
     image_path: str,
     correction: FeedbackArtifactCorrection,
 ) -> str | None:
+    if correction.bbox is None:
+        return None
+
     image = Image.open(image_path).convert("RGB")
     image_width, image_height = image.size
     bbox = clamp_bbox(
