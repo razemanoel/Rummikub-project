@@ -261,6 +261,59 @@ const isGameStateValid = validationErrors.length === 0;
     setEditingLocation({ type: 'board', setIndex, tileIndex });
   };
 
+  const defaultNewTile: Tile = {
+    value: 1,
+    color: 'blue',
+    is_joker: false,
+  };
+
+  const handleAddTileToBoardSet = (setIndex: number) => {
+    const newTile = { ...defaultNewTile };
+
+    setGameState((prev) => ({
+      ...prev,
+      board: prev.board.map((tileSet, index) =>
+        index === setIndex
+          ? { tiles: [...tileSet.tiles, newTile] }
+          : tileSet
+      ),
+    }));
+
+    setEditingTile(newTile);
+    setEditingLocation({
+      type: 'board',
+      setIndex,
+      tileIndex: gameState.board[setIndex].tiles.length,
+    });
+  };
+
+  const sortTilesInSet = (tiles: Tile[]) => {
+    const jokers = tiles.filter((tile) => tile.is_joker);
+    const normalTiles = tiles.filter((tile) => !tile.is_joker);
+
+    const sameColor =
+      normalTiles.length > 0 &&
+      normalTiles.every((tile) => tile.color === normalTiles[0].color);
+
+    if (sameColor) {
+      return [
+        ...normalTiles.sort((a, b) => (a.value || 0) - (b.value || 0)),
+        ...jokers,
+      ];
+    }
+
+    return [
+      ...normalTiles.sort((a, b) => {
+        if ((a.value || 0) !== (b.value || 0)) {
+          return (a.value || 0) - (b.value || 0);
+        }
+
+        return String(a.color).localeCompare(String(b.color));
+      }),
+      ...jokers,
+    ];
+  };
+
   const handleSaveTile = (updatedTile: Tile) => {
     if (!editingLocation) return;
 
@@ -277,11 +330,41 @@ const isGameStateValid = validationErrors.length === 0;
       if (editingLocation.type === 'rack') {
         next.rack[editingLocation.index] = updatedTile;
       } else {
-        next.board[editingLocation.setIndex].tiles[editingLocation.tileIndex] = updatedTile;
+        next.board[editingLocation.setIndex].tiles[
+          editingLocation.tileIndex
+        ] = updatedTile;
+
+        next.board[editingLocation.setIndex].tiles = sortTilesInSet(
+          next.board[editingLocation.setIndex].tiles
+        );
       }
 
       return next;
     });
+
+    if (editingLocation.type === 'rack') {
+      setRackRows((prevRows) => {
+        if (prevRows.length === 0) return prevRows;
+
+        let currentFlatIndex = 0;
+
+        return prevRows.map((row) =>
+          row.map((item) => {
+            if (currentFlatIndex === editingLocation.index) {
+              currentFlatIndex++;
+
+              return {
+                ...item,
+                tile: updatedTile,
+              };
+            }
+
+            currentFlatIndex++;
+            return item;
+          })
+        );
+      });
+    }
 
     setEditingTile(null);
     setEditingLocation(null);
@@ -294,6 +377,7 @@ const isGameStateValid = validationErrors.length === 0;
 
     if (originalDetection) {
       const correctionKey = getCorrectionKey(editingLocation);
+
       setCorrections((prev) => ({
         ...prev,
         [correctionKey]: {
@@ -319,14 +403,68 @@ const isGameStateValid = validationErrors.length === 0;
       if (editingLocation.type === 'rack') {
         next.rack.splice(editingLocation.index, 1);
       } else {
-        next.board[editingLocation.setIndex].tiles.splice(editingLocation.tileIndex, 1);
+        next.board[editingLocation.setIndex].tiles.splice(
+          editingLocation.tileIndex,
+          1
+        );
       }
 
       return next;
     });
 
+    if (editingLocation.type === 'rack') {
+      setRackRows((prevRows) => {
+        if (prevRows.length === 0) return prevRows;
+
+        let currentFlatIndex = 0;
+
+        return prevRows
+          .map((row) =>
+            row.filter(() => {
+              const shouldKeep =
+                currentFlatIndex !== editingLocation.index;
+
+              currentFlatIndex++;
+
+              return shouldKeep;
+            })
+          )
+          .filter((row) => row.length > 0);
+      });
+    }
+
     setEditingTile(null);
     setEditingLocation(null);
+  };
+
+  const handleAddRackTile = () => {
+    const newTile = { ...defaultNewTile };
+
+    setGameState((prev) => ({
+      ...prev,
+      rack: [...prev.rack, newTile],
+    }));
+
+    setRackRows((prevRows) => {
+      if (prevRows.length === 0) return prevRows;
+
+      const nextRows = prevRows.map((row) => [...row]);
+
+      const lastRowIndex = nextRows.length - 1;
+
+      nextRows[lastRowIndex].push({
+        tile: newTile,
+      });
+
+      return nextRows;
+    });
+
+    setEditingTile(newTile);
+
+    setEditingLocation({
+      type: 'rack',
+      index: gameState.rack.length,
+    });
   };
 
   const validateCurrentGameState = async (stateToValidate: GameState) => {
@@ -498,6 +636,11 @@ const isGameStateValid = validationErrors.length === 0;
                         />
                       );
                     })}
+                    {rowIndex === rackRows.length - 1 && (
+                      <Pressable style={styles.addTileButton} onPress={handleAddRackTile}>
+                        <Ionicons name="add" size={18} color="#ffffff" />
+                      </Pressable>
+                    )}
                   </View>
                 ))
               ) : (
@@ -514,6 +657,9 @@ const isGameStateValid = validationErrors.length === 0;
                       onPress={() => handleEditRackTile(index)}
                     />
                   ))}
+                  <Pressable style={styles.addTileButton} onPress={handleAddRackTile}>
+                    <Ionicons name="add" size={18} color="#ffffff" />
+                  </Pressable>
                 </View>
               )}
             </View>
@@ -524,6 +670,7 @@ const isGameStateValid = validationErrors.length === 0;
             <BoardView
               board={gameState.board}
               onTilePress={handleEditBoardTile}
+              onAddTileToSet={handleAddTileToBoardSet}
               invalidSetIndexes={invalidSetIndexes}
               invalidTileKeys={invalidTileKeys}
             />
@@ -658,5 +805,16 @@ const styles = StyleSheet.create({
 
   confirmButtonDisabled: {
     opacity: 0.45,
+  },
+  addTileButton: {
+    width: 34,
+    height: 64,
+    borderRadius: 7,
+    borderWidth: 1.5,
+    borderColor: 'rgba(255,255,255,0.35)',
+    backgroundColor: 'rgba(16, 185, 129, 0.65)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 3,
   },
 });
