@@ -232,6 +232,7 @@ def classify_detections(
     raw_detections: list[dict[str, Any]],
     bbox_offset: tuple[float, float] = (0.0, 0.0),
     require_dark_support: bool = False,
+    rack_support_mask: np.ndarray | None = None,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     analyzed_tiles: list[dict[str, Any]] = []
     offset_x, offset_y = bbox_offset
@@ -249,6 +250,11 @@ def classify_detections(
 
         if require_dark_support and image_array is not None and not has_dark_rack_support(image_array, bbox):
             debug_item["dropped_reasons"].append("no_dark_rack_support")
+            filter_log.append(debug_item)
+            continue
+
+        if rack_support_mask is not None and not has_rack_support_overlap(rack_support_mask, bbox):
+            debug_item["dropped_reasons"].append("outside_rack_region")
             filter_log.append(debug_item)
             continue
 
@@ -319,6 +325,40 @@ def has_dark_rack_support(image_array: np.ndarray, bbox: dict[str, float]) -> bo
     return dark_ratio >= 0.2
 
 
+def has_rack_support_overlap(support_mask: np.ndarray, bbox: dict[str, float]) -> bool:
+    image_height, image_width = support_mask.shape[:2]
+    x1 = max(0, min(image_width - 1, int(round(bbox["x1"]))))
+    y1 = max(0, min(image_height - 1, int(round(bbox["y1"]))))
+    x2 = max(x1 + 1, min(image_width, int(round(bbox["x2"]))))
+    y2 = max(y1 + 1, min(image_height, int(round(bbox["y2"]))))
+
+    bottom_band_height = max(int(round((y2 - y1) * 0.28)), 2)
+    band_y1 = max(y1, y2 - bottom_band_height)
+    band = support_mask[band_y1:y2, x1:x2] > 0
+    if band.size == 0:
+        return False
+
+    overlap_ratio = float(np.mean(band))
+    center_x = min(image_width - 1, max(0, int(round((x1 + x2) / 2))))
+    center_y = min(image_height - 1, max(0, y2 - 1))
+    bottom_center_supported = bool(support_mask[center_y, center_x] > 0)
+
+    column_band = support_mask[:, x1:x2] > 0
+    supported_rows = np.where(np.any(column_band, axis=1))[0]
+    if supported_rows.size == 0:
+        return False
+
+    local_front_edge_y = int(supported_rows.max())
+    bbox_height = max(y2 - y1, 1)
+    max_vertical_gap = max(int(round(bbox_height * 0.08)), 3)
+    bottom_gap = local_front_edge_y - (y2 - 1)
+
+    if bottom_gap > max_vertical_gap:
+        return False
+
+    return bottom_center_supported or overlap_ratio >= 0.12
+
+
 def looks_like_rummikub_tile_crop(crop: Image.Image) -> bool:
     crop_array = np.array(crop.convert("RGB"))
     if crop_array.size == 0:
@@ -366,6 +406,7 @@ def analyze_loaded_image(
     detector_confidence: float = 0.4,
     bbox_offset: tuple[float, float] = (0.0, 0.0),
     require_dark_support: bool = False,
+    rack_support_mask: np.ndarray | None = None,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
     raw_detections = detect_tiles_in_memory(
         image=image,
@@ -392,6 +433,7 @@ def analyze_loaded_image(
         raw_detections=detections,
         bbox_offset=bbox_offset,
         require_dark_support=require_dark_support,
+        rack_support_mask=rack_support_mask,
     )
     filter_log.extend(classification_log)
 
@@ -427,10 +469,19 @@ def analyze_rack_image(
         raise FileNotFoundError(f"Image file not found: {image_path}")
 
     image = Image.open(image_file).convert("RGB")
-    rack_bbox = detect_rack_region(image)
+    rack_region = detect_rack_region(image)
+    rack_bbox = rack_region.bbox if rack_region is not None else None
 
     if rack_bbox is None:
         rack_bbox = build_fallback_rack_bbox(image)
+
+    rack_support_mask = None
+    if rack_region is not None:
+        x1 = max(0, int(round(rack_bbox["x1"])))
+        y1 = max(0, int(round(rack_bbox["y1"])))
+        x2 = min(rack_region.support_mask.shape[1], int(round(rack_bbox["x2"])))
+        y2 = min(rack_region.support_mask.shape[0], int(round(rack_bbox["y2"])))
+        rack_support_mask = rack_region.support_mask[y1:y2, x1:x2]
 
     rack_crop = crop_image_by_bbox(image, rack_bbox)
     analyzed_tiles, raw_detections, filter_log = analyze_loaded_image(
@@ -438,6 +489,7 @@ def analyze_rack_image(
         detector_confidence=detector_confidence,
         bbox_offset=(rack_bbox["x1"], rack_bbox["y1"]),
         require_dark_support=True,
+        rack_support_mask=rack_support_mask,
     )
 
     return analyzed_tiles
