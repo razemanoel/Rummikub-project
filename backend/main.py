@@ -13,7 +13,7 @@ from backend.logic.models import (
 )
 from backend.logic.logic import validate_board, validate_game_state
 from backend.logic.solver_ilp import solve_max_rack_tiles_ilp
-from backend.vision.vision_pipeline import analyze_image
+from backend.vision.vision_pipeline import analyze_image, analyze_rack_image
 from backend.vision.feedback_service import (
     generate_feedback_artifacts,
     get_model_versions,
@@ -107,7 +107,7 @@ async def analyze_endpoint(
             my_board_path = save_upload_to_temp_file(myBoard)
             temp_files.append(my_board_path)
 
-            rack_detections = analyze_image(my_board_path)
+            rack_detections = analyze_rack_image(my_board_path)
             rack_detections = sort_rack_detections(rack_detections)
 
             rack_rows = group_detections_into_rows(

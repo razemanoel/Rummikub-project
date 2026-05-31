@@ -52,7 +52,6 @@ export default function HomeScreen() {
 
   const pickFromGallery = async (type: 'myBoard' | 'shared') => {
     try {
-      console.log(`Opening gallery for ${type}`);
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsEditing: true,
@@ -62,7 +61,6 @@ export default function HomeScreen() {
 
       if (!result.canceled && result.assets.length > 0) {
         const uri = result.assets[0].uri;
-        console.log(`Image selected: ${uri}`);
         if (type === 'myBoard') {
           setMyBoardImages([...myBoardImages, uri]);
         } else {
@@ -78,7 +76,6 @@ export default function HomeScreen() {
 
   const pickFromCamera = async (type: 'myBoard' | 'shared') => {
     try {
-      console.log(`Opening camera for ${type}`);
       const result = await ImagePicker.launchCameraAsync({
         allowsEditing: true,
         aspect: [4, 3],
@@ -87,7 +84,6 @@ export default function HomeScreen() {
 
       if (!result.canceled && result.assets.length > 0) {
         const uri = result.assets[0].uri;
-        console.log(`Photo taken: ${uri}`);
         if (type === 'myBoard') {
           setMyBoardImages([...myBoardImages, uri]);
         } else {
@@ -117,7 +113,10 @@ export default function HomeScreen() {
               onImagePicked(result.assets[0].uri);
             }
           } else {
-            Alert.alert('Permission Denied', 'Camera access is required to take photos');
+            Alert.alert(
+              'Camera Permission Needed',
+              'Allow camera access so you can take a photo of your personal rack or the shared board.'
+            );
           }
         },
       },
@@ -135,7 +134,10 @@ export default function HomeScreen() {
               onImagePicked(result.assets[0].uri);
             }
           } else {
-            Alert.alert('Permission Denied', 'Gallery access is required to select photos');
+            Alert.alert(
+              'Photo Library Permission Needed',
+              'Allow photo library access so you can choose a picture of your personal rack or the shared board.'
+            );
           }
         },
       },
@@ -164,8 +166,6 @@ export default function HomeScreen() {
     try {
       setIsAnalyzing(true);
       setAnalysisResults(null);
-
-      console.log(`Sending ${totalImages} image(s) to API for analysis...`);
       
       // Send images to API for board analysis
       const result = await apiService.analyzeBoards(
