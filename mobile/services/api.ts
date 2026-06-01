@@ -18,6 +18,7 @@ import {
 
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000/api';
 const TOKEN_KEY = 'rummikub_auth_token';
+const VISION_REQUEST_TIMEOUT_MS = 120000;
 
 // Platform detection - check if localStorage is available
 const isWeb = typeof localStorage !== 'undefined';
@@ -183,6 +184,7 @@ async analyzeBoards(
       headers: {
         'Content-Type': 'multipart/form-data',
       },
+      timeout: VISION_REQUEST_TIMEOUT_MS,
     });
 
     return response.data;
@@ -226,6 +228,7 @@ async submitVisionFeedback(
       headers: {
         'Content-Type': 'multipart/form-data',
       },
+      timeout: VISION_REQUEST_TIMEOUT_MS,
     });
 
     return response.data;

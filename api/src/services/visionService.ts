@@ -1,5 +1,6 @@
 import axios, { AxiosInstance } from 'axios';
 import FormData from 'form-data';
+import { normalizeUploadedImage } from './imageNormalizationService';
 
 type MulterFile = Express.Multer.File;
 
@@ -125,19 +126,28 @@ class VisionService {
     }
 
     const formData = new FormData();
-  formData.append('feedback', JSON.stringify({ corrections, finalImageDetections }));
+    formData.append('feedback', JSON.stringify({ corrections, finalImageDetections }));
 
-    if (rackImageFile) {
-      formData.append('rackImage', rackImageFile.buffer, {
-        filename: rackImageFile.originalname || 'rack-feedback.jpg',
-        contentType: rackImageFile.mimetype,
+    const normalizedRackImageFile = await normalizeUploadedImage(
+      rackImageFile,
+      'rack-feedback'
+    );
+    const normalizedBoardImageFile = await normalizeUploadedImage(
+      boardImageFile,
+      'board-feedback'
+    );
+
+    if (normalizedRackImageFile) {
+      formData.append('rackImage', normalizedRackImageFile.buffer, {
+        filename: normalizedRackImageFile.originalname || 'rack-feedback.jpg',
+        contentType: normalizedRackImageFile.mimetype,
       });
     }
 
-    if (boardImageFile) {
-      formData.append('boardImage', boardImageFile.buffer, {
-        filename: boardImageFile.originalname || 'board-feedback.jpg',
-        contentType: boardImageFile.mimetype,
+    if (normalizedBoardImageFile) {
+      formData.append('boardImage', normalizedBoardImageFile.buffer, {
+        filename: normalizedBoardImageFile.originalname || 'board-feedback.jpg',
+        contentType: normalizedBoardImageFile.mimetype,
       });
     }
 
@@ -223,6 +233,15 @@ async analyzeBoards(
       };
     }
 
+    const normalizedMyBoardFile = await normalizeUploadedImage(
+      myBoardFile,
+      'myBoard'
+    );
+    const normalizedSharedBoardFile = await normalizeUploadedImage(
+      sharedBoardFile,
+      'sharedBoard'
+    );
+
     const isHealthy = await this.healthCheck();
     if (!isHealthy) {
       throw new Error('Vision server is not responding');
@@ -230,17 +249,17 @@ async analyzeBoards(
 
     const formData = new FormData();
 
-    if (myBoardFile) {
-      formData.append('myBoard', myBoardFile.buffer, {
-        filename: myBoardFile.originalname || 'myBoard.jpg',
-        contentType: myBoardFile.mimetype,
+    if (normalizedMyBoardFile) {
+      formData.append('myBoard', normalizedMyBoardFile.buffer, {
+        filename: normalizedMyBoardFile.originalname || 'myBoard.jpg',
+        contentType: normalizedMyBoardFile.mimetype,
       });
     }
 
-    if (sharedBoardFile) {
-      formData.append('sharedBoard', sharedBoardFile.buffer, {
-        filename: sharedBoardFile.originalname || 'sharedBoard.jpg',
-        contentType: sharedBoardFile.mimetype,
+    if (normalizedSharedBoardFile) {
+      formData.append('sharedBoard', normalizedSharedBoardFile.buffer, {
+        filename: normalizedSharedBoardFile.originalname || 'sharedBoard.jpg',
+        contentType: normalizedSharedBoardFile.mimetype,
       });
     }
 

@@ -30,6 +30,16 @@ export default function HomeScreen() {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisResults, setAnalysisResults] = useState<any | null>(null);
 
+  const logSelectedAsset = (source: 'camera' | 'gallery', type: 'myBoard' | 'shared', asset: ImagePicker.ImagePickerAsset) => {
+    console.log('[image-picker] selected asset', {
+      source,
+      type,
+      width: asset.width,
+      height: asset.height,
+      uri: asset.uri,
+    });
+  };
+
   const handleUploadMyBoard = () => {
     if (Platform.OS === 'web') {
       setShowPickerForType('myBoard');
@@ -54,13 +64,14 @@ export default function HomeScreen() {
     try {
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: true,
-        aspect: [4, 3],
+        allowsEditing: false,
         quality: 0.8,
       });
 
       if (!result.canceled && result.assets.length > 0) {
-        const uri = result.assets[0].uri;
+        const asset = result.assets[0];
+        logSelectedAsset('gallery', type, asset);
+        const uri = asset.uri;
         if (type === 'myBoard') {
           setMyBoardImages([...myBoardImages, uri]);
         } else {
@@ -77,13 +88,14 @@ export default function HomeScreen() {
   const pickFromCamera = async (type: 'myBoard' | 'shared') => {
     try {
       const result = await ImagePicker.launchCameraAsync({
-        allowsEditing: true,
-        aspect: [4, 3],
+        allowsEditing: false,
         quality: 0.8,
       });
 
       if (!result.canceled && result.assets.length > 0) {
-        const uri = result.assets[0].uri;
+        const asset = result.assets[0];
+        logSelectedAsset('camera', type, asset);
+        const uri = asset.uri;
         if (type === 'myBoard') {
           setMyBoardImages([...myBoardImages, uri]);
         } else {
@@ -105,12 +117,13 @@ export default function HomeScreen() {
           const permission = await ImagePicker.requestCameraPermissionsAsync();
           if (permission.granted) {
             const result = await ImagePicker.launchCameraAsync({
-              allowsEditing: true,
-              aspect: [4, 3],
+              allowsEditing: false,
               quality: 0.8,
             });
-            if (!result.canceled) {
-              onImagePicked(result.assets[0].uri);
+            if (!result.canceled && result.assets.length > 0) {
+              const asset = result.assets[0];
+              logSelectedAsset('camera', showPickerForType ?? 'myBoard', asset);
+              onImagePicked(asset.uri);
             }
           } else {
             Alert.alert(
@@ -126,12 +139,13 @@ export default function HomeScreen() {
           const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
           if (permission.granted) {
             const result = await ImagePicker.launchImageLibraryAsync({
-              allowsEditing: true,
-              aspect: [4, 3],
+              allowsEditing: false,
               quality: 0.8,
             });
-            if (!result.canceled) {
-              onImagePicked(result.assets[0].uri);
+            if (!result.canceled && result.assets.length > 0) {
+              const asset = result.assets[0];
+              logSelectedAsset('gallery', showPickerForType ?? 'myBoard', asset);
+              onImagePicked(asset.uri);
             }
           } else {
             Alert.alert(

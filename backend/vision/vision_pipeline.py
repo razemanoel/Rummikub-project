@@ -1,3 +1,5 @@
+import json
+import logging
 from pathlib import Path
 import tempfile
 from typing import Any
@@ -9,6 +11,13 @@ from backend.vision.detector_service import detect_tiles
 from backend.vision.classifier_service import classify_tile_crop
 from backend.logic.models import Tile, TileColor
 from backend.vision.rack_region import detect_rack_region
+
+
+logger = logging.getLogger("uvicorn.error")
+
+
+def emit_structured_log(event: str, **payload: object) -> None:
+    logger.info(json.dumps({"event": event, **payload}, ensure_ascii=True, sort_keys=True))
 
 
 def crop_image_by_bbox(image: Image.Image, bbox: dict[str, float]) -> Image.Image:
@@ -52,6 +61,165 @@ def offset_bbox(
 
 def bbox_area(bbox: dict[str, float]) -> float:
     return max(0.0, bbox["x2"] - bbox["x1"]) * max(0.0, bbox["y2"] - bbox["y1"])
+
+
+def bbox_width(bbox: dict[str, float]) -> float:
+    return max(0.0, bbox["x2"] - bbox["x1"])
+
+
+def bbox_height(bbox: dict[str, float]) -> float:
+    return max(0.0, bbox["y2"] - bbox["y1"])
+
+
+def bbox_center(bbox: dict[str, float]) -> tuple[float, float]:
+    return (
+        (bbox["x1"] + bbox["x2"]) / 2.0,
+        (bbox["y1"] + bbox["y2"]) / 2.0,
+    )
+
+
+def similarity_ratio(left: float, right: float) -> float:
+    larger = max(left, right)
+    if larger <= 0:
+        return 0.0
+    return min(left, right) / larger
+
+
+def containment_ratio(left_bbox: dict[str, float], right_bbox: dict[str, float]) -> float:
+    intersection_x1 = max(left_bbox["x1"], right_bbox["x1"])
+    intersection_y1 = max(left_bbox["y1"], right_bbox["y1"])
+    intersection_x2 = min(left_bbox["x2"], right_bbox["x2"])
+    intersection_y2 = min(left_bbox["y2"], right_bbox["y2"])
+
+    intersection_width = max(0.0, intersection_x2 - intersection_x1)
+    intersection_height = max(0.0, intersection_y2 - intersection_y1)
+    intersection_area = intersection_width * intersection_height
+    if intersection_area <= 0:
+        return 0.0
+
+    smaller_area = min(bbox_area(left_bbox), bbox_area(right_bbox))
+    if smaller_area <= 0:
+        return 0.0
+
+    return intersection_area / smaller_area
+
+
+def board_duplicate_metrics(
+    left_detection: dict[str, Any],
+    right_detection: dict[str, Any],
+) -> dict[str, float]:
+    left_bbox = left_detection["bbox"]
+    right_bbox = right_detection["bbox"]
+    left_center_x, left_center_y = bbox_center(left_bbox)
+    right_center_x, right_center_y = bbox_center(right_bbox)
+    center_distance = float(np.hypot(left_center_x - right_center_x, left_center_y - right_center_y))
+    left_diagonal = float(np.hypot(bbox_width(left_bbox), bbox_height(left_bbox)))
+    right_diagonal = float(np.hypot(bbox_width(right_bbox), bbox_height(right_bbox)))
+    average_diagonal = max((left_diagonal + right_diagonal) / 2.0, 1.0)
+
+    return {
+        "iou": round(bbox_iou(left_bbox, right_bbox), 4),
+        "center_distance": round(center_distance, 4),
+        "normalized_center_distance": round(center_distance / average_diagonal, 4),
+        "containment_ratio": round(containment_ratio(left_bbox, right_bbox), 4),
+        "width_similarity": round(similarity_ratio(bbox_width(left_bbox), bbox_width(right_bbox)), 4),
+        "height_similarity": round(similarity_ratio(bbox_height(left_bbox), bbox_height(right_bbox)), 4),
+        "area_similarity": round(similarity_ratio(bbox_area(left_bbox), bbox_area(right_bbox)), 4),
+    }
+
+
+def board_duplicate_reason(metrics: dict[str, float]) -> str | None:
+    if metrics["iou"] >= 0.72:
+        return "high_iou"
+
+    if (
+        metrics["normalized_center_distance"] <= 0.16
+        and metrics["width_similarity"] >= 0.78
+        and metrics["height_similarity"] >= 0.78
+        and metrics["area_similarity"] >= 0.65
+    ):
+        return "center_size_match"
+
+    if (
+        metrics["containment_ratio"] >= 0.84
+        and metrics["normalized_center_distance"] <= 0.22
+        and metrics["area_similarity"] >= 0.55
+    ):
+        return "containment_match"
+
+    if (
+        metrics["iou"] >= 0.38
+        and metrics["normalized_center_distance"] <= 0.14
+        and metrics["width_similarity"] >= 0.72
+        and metrics["height_similarity"] >= 0.72
+        and metrics["area_similarity"] >= 0.58
+    ):
+        return "hybrid_match"
+
+    return None
+
+
+def serialize_detection(detection: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "bbox": detection["bbox"],
+        "detector_confidence": round(float(detection["detector_confidence"]), 4),
+    }
+
+
+def suppress_board_duplicate_detections(
+    detections: list[dict[str, Any]],
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]], dict[str, int]]:
+    kept_with_indices: list[tuple[int, dict[str, Any]]] = []
+    suppression_events: list[dict[str, Any]] = []
+    reason_counts = {
+        "high_iou": 0,
+        "center_size_match": 0,
+        "containment_match": 0,
+        "hybrid_match": 0,
+    }
+
+    ranked_detections = sorted(
+        enumerate(detections),
+        key=lambda item: item[1]["detector_confidence"],
+        reverse=True,
+    )
+
+    for raw_index, detection in ranked_detections:
+        suppressed = False
+
+        for kept_index, kept_detection in kept_with_indices:
+            metrics = board_duplicate_metrics(detection, kept_detection)
+            reason = board_duplicate_reason(metrics)
+            if reason is None:
+                continue
+
+            reason_counts[reason] += 1
+            suppression_events.append(
+                {
+                    "reason": reason,
+                    "kept_detection": {
+                        "raw_index": kept_index,
+                        **serialize_detection(kept_detection),
+                    },
+                    "suppressed_detection": {
+                        "raw_index": raw_index,
+                        **serialize_detection(detection),
+                    },
+                    **metrics,
+                    "kept_detector_confidence": round(float(kept_detection["detector_confidence"]), 4),
+                    "suppressed_detector_confidence": round(float(detection["detector_confidence"]), 4),
+                }
+            )
+            suppressed = True
+            break
+
+        if not suppressed:
+            kept_with_indices.append((raw_index, detection))
+
+    kept_detections = [item[1] for item in kept_with_indices]
+    kept_detections.sort(key=lambda item: (item["bbox"]["y1"], item["bbox"]["x1"]))
+
+    return kept_detections, suppression_events, reason_counts
 
 
 def bbox_iou(left_bbox: dict[str, float], right_bbox: dict[str, float]) -> float:
@@ -169,62 +337,23 @@ def detect_tiles_in_memory(
         )
 
 
-def board_detection_windows(image: Image.Image) -> list[tuple[float, float, float, float]]:
-    image_width, image_height = image.size
-
-    return [
-        (0.0, 0.0, float(image_width), float(image_height)),
-        (0.0, 0.0, float(image_width * 0.62), float(image_height)),
-        (float(image_width * 0.38), 0.0, float(image_width), float(image_height)),
-        (0.0, 0.0, float(image_width), float(image_height * 0.72)),
-        (0.0, float(image_height * 0.28), float(image_width), float(image_height)),
-        (
-            float(image_width * 0.10),
-            float(image_height * 0.45),
-            float(image_width * 0.55),
-            float(image_height),
-        ),
-        (
-            float(image_width * 0.58),
-            float(image_height * 0.42),
-            float(image_width),
-            float(image_height * 0.78),
-        ),
-    ]
-
-
 def collect_board_raw_detections(
     image: Image.Image,
     detector_confidence: float,
-) -> list[dict[str, Any]]:
-    collected_detections: list[dict[str, Any]] = []
-
-    for x1, y1, x2, y2 in board_detection_windows(image):
-        window_bbox = {
-            "x1": x1,
-            "y1": y1,
-            "x2": x2,
-            "y2": y2,
-        }
-        window_image = crop_image_by_bbox(image, window_bbox)
-        window_detections = detect_tiles_in_memory(
-            image=window_image,
-            detector_confidence=detector_confidence,
-        )
-
-        for detection in window_detections:
-            collected_detections.append(
-                {
-                    **detection,
-                    "bbox": offset_bbox(detection["bbox"], x1, y1),
-                }
-            )
+) -> tuple[list[dict[str, Any]], dict[str, int]]:
+    collected_detections = detect_tiles_in_memory(
+        image=image,
+        detector_confidence=detector_confidence,
+    )
 
     merged_detections = merge_overlapping_detections(
         collected_detections,
         iou_threshold=0.35,
     )
-    return merged_detections
+    return merged_detections, {
+        "raw_detection_count": len(collected_detections),
+        "merged_detection_count": len(merged_detections),
+    }
 
 
 def classify_detections(
@@ -448,13 +577,36 @@ def analyze_image(image_path: str, detector_confidence: float = 0.4) -> list[dic
 
     image = Image.open(image_file).convert("RGB")
 
-    raw_detections = collect_board_raw_detections(
+    merged_detections, board_detection_stats = collect_board_raw_detections(
         image=image,
         detector_confidence=detector_confidence,
     )
+    suppressed_detections, suppression_events, suppression_reason_counts = suppress_board_duplicate_detections(
+        merged_detections,
+    )
+
+    for suppression_event in suppression_events:
+        emit_structured_log(
+            "board_duplicate_suppression_item",
+            **suppression_event,
+        )
+
+    emit_structured_log(
+        "board_duplicate_suppression_summary",
+        raw_detection_count=board_detection_stats["raw_detection_count"],
+        merged_detection_count=board_detection_stats["merged_detection_count"],
+        duplicate_suppression_count=len(suppression_events),
+        post_suppression_detection_count=len(suppressed_detections),
+        suppression_reason_counts=suppression_reason_counts,
+    )
+    emit_structured_log(
+        "board_duplicate_suppression_final",
+        detections=[serialize_detection(detection) for detection in suppressed_detections],
+    )
+
     analyzed_tiles, _ = classify_detections(
         image=image,
-        raw_detections=raw_detections,
+        raw_detections=suppressed_detections,
     )
     return analyzed_tiles
 
@@ -479,9 +631,9 @@ def analyze_rack_image(
     if rack_region is not None:
         x1 = max(0, int(round(rack_bbox["x1"])))
         y1 = max(0, int(round(rack_bbox["y1"])))
-        x2 = min(rack_region.support_mask.shape[1], int(round(rack_bbox["x2"])))
-        y2 = min(rack_region.support_mask.shape[0], int(round(rack_bbox["y2"])))
-        rack_support_mask = rack_region.support_mask[y1:y2, x1:x2]
+        x2 = min(rack_region.front_support_mask.shape[1], int(round(rack_bbox["x2"])))
+        y2 = min(rack_region.front_support_mask.shape[0], int(round(rack_bbox["y2"])))
+        rack_support_mask = rack_region.front_support_mask[y1:y2, x1:x2]
 
     rack_crop = crop_image_by_bbox(image, rack_bbox)
     analyzed_tiles, raw_detections, filter_log = analyze_loaded_image(

@@ -3,6 +3,7 @@ classification_dataset/
 classification_dataset_split/
 feedback_dataset/
 exported_feedback_dataset/
+test_images/
 
 detection_dataset/images/
 detection_dataset/labels/

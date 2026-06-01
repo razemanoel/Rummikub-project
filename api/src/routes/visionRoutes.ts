@@ -8,7 +8,7 @@ const router = Router();
 /**
  * Configure multer for handling file uploads
  * - Limits: 10MB per file, 20MB total
- * - Accepts JPEG and PNG images
+ * - Accepts any image/* MIME type
  */
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -16,11 +16,10 @@ const upload = multer({
     fileSize: 10 * 1024 * 1024, // 10MB per file
   },
   fileFilter: (req: any, file: any, cb: FileFilterCallback): void => {
-    const allowedMimes = ['image/jpeg', 'image/png', 'image/jpg'];
-    if (allowedMimes.includes(file.mimetype)) {
+    if (typeof file.mimetype === 'string' && file.mimetype.startsWith('image/')) {
       cb(null, true);
     } else {
-      cb(new Error('Only JPEG and PNG images are allowed') as any, false);
+      cb(new Error('Only image uploads are allowed') as any, false);
     }
   },
 });

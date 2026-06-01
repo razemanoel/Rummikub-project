@@ -1,5 +1,6 @@
 import { Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
+import { ImageNormalizationError } from '../services/imageNormalizationService';
 import { visionService } from '../services/visionService';
 import { visionFeedbackService } from '../services/visionFeedbackService';
 
@@ -114,7 +115,9 @@ export class VisionController {
     } catch (error: any) {
       const message = error.message || 'Failed to save vision feedback';
       const statusCode =
-        message.includes('Feedback payload') || message.includes('corrections')
+        error instanceof ImageNormalizationError
+        || message.includes('Feedback payload')
+        || message.includes('corrections')
           ? 400
           : 500;
 

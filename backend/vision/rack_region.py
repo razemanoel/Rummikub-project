@@ -11,6 +11,7 @@ from PIL import Image
 class RackRegion:
     bbox: dict[str, float]
     support_mask: np.ndarray
+    front_support_mask: np.ndarray
 
 
 def _image_to_bgr(image: Image.Image) -> np.ndarray:
@@ -85,9 +86,12 @@ def _add_front_support_region(
         ],
         dtype=np.int32,
     )
+
+    front_mask = np.zeros_like(rack_mask)
+    cv2.fillConvexPoly(front_mask, front_polygon, 255)
     cv2.fillConvexPoly(rack_mask, front_polygon, 255)
 
-    return rack_mask
+    return front_mask
 
 
 def detect_rack_region(image: Image.Image) -> RackRegion | None:
@@ -182,13 +186,14 @@ def detect_rack_region(image: Image.Image) -> RackRegion | None:
         rack_mask=best_candidate[2],
         bbox=bbox,
     )
-    rack_mask = _add_front_support_region(
+    front_support_mask = _add_front_support_region(
         rack_mask=rack_mask,
         bbox=bbox,
     )
 
     support_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (31, 19))
     support_mask = cv2.dilate(rack_mask, support_kernel, iterations=1)
+    front_support_mask = cv2.dilate(front_support_mask, support_kernel, iterations=1)
 
     support_points = cv2.findNonZero(support_mask)
     if support_points is None:
@@ -207,4 +212,5 @@ def detect_rack_region(image: Image.Image) -> RackRegion | None:
             "y2": min(float(image_height), float(support_y + support_height) + bottom_padding_y),
         },
         support_mask=support_mask,
+        front_support_mask=front_support_mask,
     )
