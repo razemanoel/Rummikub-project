@@ -30,8 +30,6 @@ export class VisionController {
         });
       }
 
-      console.log('Authenticated vision analysis request received');
-
       // Get uploaded files from multer middleware
       const files = req.files as { [key: string]: any[] } | undefined;
 
@@ -44,14 +42,6 @@ export class VisionController {
           success: false,
           message: 'At least one board image is required',
         });
-      }
-
-      // Log file info for debugging
-      if (myBoardFile) {
-        console.log(`Processing myBoard: ${myBoardFile.originalname} (${myBoardFile.size} bytes)`);
-      }
-      if (sharedBoardFile) {
-        console.log(`Processing sharedBoard: ${sharedBoardFile.originalname} (${sharedBoardFile.size} bytes)`);
       }
 
       // Forward to vision service

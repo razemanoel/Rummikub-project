@@ -1,3 +1,4 @@
+import asyncio
 import os
 import tempfile
 from typing import Optional
@@ -13,7 +14,9 @@ from backend.logic.models import (
 )
 from backend.logic.logic import validate_board, validate_game_state
 from backend.logic.solver_ilp import solve_max_rack_tiles_ilp
+from backend.vision.classifier_service import preload_classifier_model
 from backend.vision.vision_pipeline import analyze_image, analyze_rack_image
+from backend.vision.detector_service import preload_detector_model
 from backend.vision.feedback_service import (
     generate_feedback_artifacts,
     get_model_versions,
@@ -32,6 +35,13 @@ app = FastAPI(title="Rummikub Vision Service", version="0.4.0")
 @app.get("/health")
 def health():
     return {"status": "ok"}
+
+
+@app.on_event("startup")
+async def preload_vision_models() -> None:
+    await asyncio.to_thread(preload_detector_model)
+
+    await asyncio.to_thread(preload_classifier_model)
 
 
 def save_upload_to_temp_file(upload: UploadFile) -> str:
@@ -60,6 +70,27 @@ def to_review_detection(detection: dict, source: str) -> dict:
         "confidence": detection["combined_confidence"],
         "bbox": xyxy_to_bbox(detection["bbox"]),
     }
+
+
+def run_rack_analysis(image_path: str) -> tuple[list[dict], list[list[dict]]]:
+    rack_detections = analyze_rack_image(
+        image_path,
+        source="rack",
+    )
+    rack_detections = sort_rack_detections(rack_detections)
+    rack_rows = group_detections_into_rows(
+        rack_detections,
+        row_tolerance_ratio=0.45,
+    )
+    return rack_detections, rack_rows
+
+
+def run_board_analysis(image_path: str) -> list[dict]:
+    board_detections = analyze_image(
+        image_path,
+        source="board",
+    )
+    return board_detections
 
 
 @app.post("/classify-tiles")
@@ -103,23 +134,34 @@ async def analyze_endpoint(
     temp_files = []
 
     try:
+        rack_task = None
+        board_task = None
+
         if myBoard is not None:
             my_board_path = save_upload_to_temp_file(myBoard)
             temp_files.append(my_board_path)
-
-            rack_detections = analyze_rack_image(my_board_path)
-            rack_detections = sort_rack_detections(rack_detections)
-
-            rack_rows = group_detections_into_rows(
-                rack_detections,
-                row_tolerance_ratio=0.45,
+            rack_task = asyncio.to_thread(
+                run_rack_analysis,
+                my_board_path,
             )
 
         if sharedBoard is not None:
             shared_board_path = save_upload_to_temp_file(sharedBoard)
             temp_files.append(shared_board_path)
+            board_task = asyncio.to_thread(
+                run_board_analysis,
+                shared_board_path,
+            )
 
-            board_detections = analyze_image(shared_board_path)
+        if rack_task is not None and board_task is not None:
+            (rack_detections, rack_rows), board_detections = await asyncio.gather(
+                rack_task,
+                board_task,
+            )
+        elif rack_task is not None:
+            rack_detections, rack_rows = await rack_task
+        elif board_task is not None:
+            board_detections = await board_task
 
         game_state = build_game_state(
             rack_detections=rack_detections,

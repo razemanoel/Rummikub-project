@@ -1,23 +1,17 @@
-import json
-import logging
+import os
 from pathlib import Path
-import tempfile
 from typing import Any
 
 import numpy as np
-from PIL import Image
+from PIL import Image, ImageOps
 
-from backend.vision.detector_service import detect_tiles
-from backend.vision.classifier_service import classify_tile_crop
+from backend.vision.detector_service import detect_tiles_from_array
+from backend.vision.classifier_service import classify_tile_crops
 from backend.logic.models import Tile, TileColor
 from backend.vision.rack_region import detect_rack_region
 
 
-logger = logging.getLogger("uvicorn.error")
-
-
-def emit_structured_log(event: str, **payload: object) -> None:
-    logger.info(json.dumps({"event": event, **payload}, ensure_ascii=True, sort_keys=True))
+DEFAULT_MAX_IMAGE_SIDE = 2560
 
 
 def crop_image_by_bbox(image: Image.Image, bbox: dict[str, float]) -> Image.Image:
@@ -29,6 +23,105 @@ def crop_image_by_bbox(image: Image.Image, bbox: dict[str, float]) -> Image.Imag
             bbox["y2"],
         )
     )
+
+
+def load_image_rgb(image_file: Path) -> Image.Image:
+    with Image.open(image_file) as source_image:
+        return ImageOps.exif_transpose(source_image).convert("RGB")
+
+
+def get_max_image_side() -> int:
+    configured_value = os.getenv("VISION_MAX_IMAGE_SIDE")
+    if configured_value is None:
+        return DEFAULT_MAX_IMAGE_SIDE
+
+    try:
+        parsed_value = int(configured_value)
+    except ValueError as error:
+        raise ValueError("VISION_MAX_IMAGE_SIDE must be an integer") from error
+
+    if parsed_value <= 0:
+        raise ValueError("VISION_MAX_IMAGE_SIDE must be greater than 0")
+
+    return parsed_value
+
+
+def prepare_image_for_detection(
+    image: Image.Image,
+    source: str = "unknown",
+) -> tuple[Image.Image, dict[str, float | int | bool]]:
+    original_width, original_height = image.size
+    max_image_side = get_max_image_side()
+    longest_side = max(original_width, original_height)
+
+    if source == "rack":
+        return image, {
+            "original_width": original_width,
+            "original_height": original_height,
+            "inference_width": original_width,
+            "inference_height": original_height,
+            "scale_x": 1.0,
+            "scale_y": 1.0,
+            "resized": False,
+            "max_image_side": max_image_side,
+        }
+
+    if longest_side <= max_image_side:
+        return image, {
+            "original_width": original_width,
+            "original_height": original_height,
+            "inference_width": original_width,
+            "inference_height": original_height,
+            "scale_x": 1.0,
+            "scale_y": 1.0,
+            "resized": False,
+            "max_image_side": max_image_side,
+        }
+
+    scale = max_image_side / float(longest_side)
+    resized_width = max(1, int(round(original_width * scale)))
+    resized_height = max(1, int(round(original_height * scale)))
+    resized_image = image.resize((resized_width, resized_height), Image.Resampling.LANCZOS)
+
+    return resized_image, {
+        "original_width": original_width,
+        "original_height": original_height,
+        "inference_width": resized_width,
+        "inference_height": resized_height,
+        "scale_x": resized_width / float(original_width),
+        "scale_y": resized_height / float(original_height),
+        "resized": True,
+        "max_image_side": max_image_side,
+    }
+
+
+def remap_detections_to_original_size(
+    detections: list[dict[str, Any]],
+    scale_x: float,
+    scale_y: float,
+) -> list[dict[str, Any]]:
+    if scale_x == 1.0 and scale_y == 1.0:
+        return detections
+
+    remapped_detections: list[dict[str, Any]] = []
+    inverse_scale_x = 1.0 / scale_x
+    inverse_scale_y = 1.0 / scale_y
+
+    for detection in detections:
+        bbox = detection["bbox"]
+        remapped_detections.append(
+            {
+                **detection,
+                "bbox": {
+                    "x1": round(float(bbox["x1"] * inverse_scale_x), 2),
+                    "y1": round(float(bbox["y1"] * inverse_scale_y), 2),
+                    "x2": round(float(bbox["x2"] * inverse_scale_x), 2),
+                    "y2": round(float(bbox["y2"] * inverse_scale_y), 2),
+                },
+            }
+        )
+
+    return remapped_detections
 
 
 def detection_to_tile(classification: dict[str, Any]) -> Tile:
@@ -327,23 +420,35 @@ def merge_overlapping_detections(
 def detect_tiles_in_memory(
     image: Image.Image,
     detector_confidence: float = 0.4,
+    source: str = "unknown",
 ) -> list[dict[str, Any]]:
-    with tempfile.TemporaryDirectory() as temp_dir:
-        temp_path = Path(temp_dir) / "vision-input.png"
-        image.save(temp_path, format="PNG")
-        return detect_tiles(
-            image_path=str(temp_path),
-            confidence=detector_confidence,
-        )
+    prepared_image, preparation_metadata = prepare_image_for_detection(
+        image,
+        source=source,
+    )
+    detections = detect_tiles_from_array(
+        np.array(prepared_image.convert("RGB")),
+        confidence=detector_confidence,
+    )
+
+    remapped_detections = remap_detections_to_original_size(
+        detections,
+        scale_x=float(preparation_metadata["scale_x"]),
+        scale_y=float(preparation_metadata["scale_y"]),
+    )
+
+    return remapped_detections
 
 
 def collect_board_raw_detections(
     image: Image.Image,
     detector_confidence: float,
+    source: str,
 ) -> tuple[list[dict[str, Any]], dict[str, int]]:
     collected_detections = detect_tiles_in_memory(
         image=image,
         detector_confidence=detector_confidence,
+        source=source,
     )
 
     merged_detections = merge_overlapping_detections(
@@ -362,11 +467,14 @@ def classify_detections(
     bbox_offset: tuple[float, float] = (0.0, 0.0),
     require_dark_support: bool = False,
     rack_support_mask: np.ndarray | None = None,
+    source: str = "unknown",
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     analyzed_tiles: list[dict[str, Any]] = []
     offset_x, offset_y = bbox_offset
     image_array = np.array(image.convert("RGB")) if require_dark_support else None
     filter_log: list[dict[str, Any]] = []
+    pending_detections: list[tuple[dict[str, Any], dict[str, Any]]] = []
+    crops: list[Image.Image] = []
 
     for raw_index, detection in enumerate(raw_detections):
         bbox = detection["bbox"]
@@ -387,9 +495,13 @@ def classify_detections(
             filter_log.append(debug_item)
             continue
 
-        crop = crop_image_by_bbox(image, bbox)
+        pending_detections.append((detection, debug_item))
+        crops.append(crop_image_by_bbox(image, bbox))
 
-        classification = classify_tile_crop(crop)
+    classifications = classify_tile_crops(crops)
+
+    for (detection, debug_item), classification in zip(pending_detections, classifications):
+        bbox = detection["bbox"]
         tile = detection_to_tile(classification)
         debug_item["class_name"] = classification["class_name"]
         debug_item["classifier_confidence"] = classification["classifier_confidence"]
@@ -536,10 +648,12 @@ def analyze_loaded_image(
     bbox_offset: tuple[float, float] = (0.0, 0.0),
     require_dark_support: bool = False,
     rack_support_mask: np.ndarray | None = None,
+    source: str = "unknown",
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
     raw_detections = detect_tiles_in_memory(
         image=image,
         detector_confidence=detector_confidence,
+        source=source,
     )
     detections, suppression_log = deduplicate_detections(raw_detections)
     filter_log: list[dict[str, Any]] = []
@@ -563,50 +677,38 @@ def analyze_loaded_image(
         bbox_offset=bbox_offset,
         require_dark_support=require_dark_support,
         rack_support_mask=rack_support_mask,
+        source=source,
     )
     filter_log.extend(classification_log)
 
     return analyzed_tiles, raw_detections, filter_log
 
 
-def analyze_image(image_path: str, detector_confidence: float = 0.4) -> list[dict[str, Any]]:
+def analyze_image(
+    image_path: str,
+    detector_confidence: float = 0.4,
+    source: str = "board",
+) -> list[dict[str, Any]]:
     image_file = Path(image_path)
 
     if not image_file.exists():
         raise FileNotFoundError(f"Image file not found: {image_path}")
 
-    image = Image.open(image_file).convert("RGB")
+    image = load_image_rgb(image_file)
 
     merged_detections, board_detection_stats = collect_board_raw_detections(
         image=image,
         detector_confidence=detector_confidence,
+        source=source,
     )
     suppressed_detections, suppression_events, suppression_reason_counts = suppress_board_duplicate_detections(
         merged_detections,
     )
 
-    for suppression_event in suppression_events:
-        emit_structured_log(
-            "board_duplicate_suppression_item",
-            **suppression_event,
-        )
-
-    emit_structured_log(
-        "board_duplicate_suppression_summary",
-        raw_detection_count=board_detection_stats["raw_detection_count"],
-        merged_detection_count=board_detection_stats["merged_detection_count"],
-        duplicate_suppression_count=len(suppression_events),
-        post_suppression_detection_count=len(suppressed_detections),
-        suppression_reason_counts=suppression_reason_counts,
-    )
-    emit_structured_log(
-        "board_duplicate_suppression_final",
-        detections=[serialize_detection(detection) for detection in suppressed_detections],
-    )
-
     analyzed_tiles, _ = classify_detections(
         image=image,
         raw_detections=suppressed_detections,
+        source=source,
     )
     return analyzed_tiles
 
@@ -614,13 +716,14 @@ def analyze_image(image_path: str, detector_confidence: float = 0.4) -> list[dic
 def analyze_rack_image(
     image_path: str,
     detector_confidence: float = 0.4,
+    source: str = "rack",
 ) -> list[dict[str, Any]]:
     image_file = Path(image_path)
 
     if not image_file.exists():
         raise FileNotFoundError(f"Image file not found: {image_path}")
 
-    image = Image.open(image_file).convert("RGB")
+    image = load_image_rgb(image_file)
     rack_region = detect_rack_region(image)
     rack_bbox = rack_region.bbox if rack_region is not None else None
 
@@ -640,8 +743,22 @@ def analyze_rack_image(
         image=rack_crop,
         detector_confidence=detector_confidence,
         bbox_offset=(rack_bbox["x1"], rack_bbox["y1"]),
-        require_dark_support=True,
+        require_dark_support=rack_region is not None,
         rack_support_mask=rack_support_mask,
+        source=source,
     )
+
+    dropped_reason_counts: dict[str, int] = {}
+    kept_count = 0
+
+    for item in filter_log:
+        dropped_reasons = item.get("dropped_reasons", [])
+        if dropped_reasons:
+            for reason in dropped_reasons:
+                dropped_reason_counts[reason] = dropped_reason_counts.get(reason, 0) + 1
+            continue
+
+        if item.get("status") == "kept":
+            kept_count += 1
 
     return analyzed_tiles

@@ -28,17 +28,27 @@ async function convertHeicBuffer(buffer: Buffer): Promise<Buffer> {
   return Buffer.isBuffer(converted) ? converted : Buffer.from(converted);
 }
 
-async function decodeInputBuffer(buffer: Buffer): Promise<Buffer> {
+function buildJpegFilename(originalname: string | undefined, fallbackName: string): string {
+  const name = originalname?.trim() || fallbackName;
+  const baseName = name.replace(/\.[^.]+$/, '');
+  return `${baseName || fallbackName}.jpg`;
+}
+
+function canPassThroughImage(file: MulterFile): boolean {
+  return (
+    ['image/jpeg', 'image/png', 'image/webp'].includes(file.mimetype)
+    && !isIsoBaseMediaBuffer(file.buffer)
+  );
+}
+
+async function transcodeImageBuffer(buffer: Buffer): Promise<Buffer> {
   try {
-    const metadata = await sharp(buffer).metadata();
-
-    if (metadata.format === 'heif') {
-      return convertHeicBuffer(buffer);
-    }
-
-    return buffer;
+    return await sharp(buffer)
+      .rotate()
+      .jpeg({ quality: 90 })
+      .toBuffer();
   } catch (sharpError) {
-    console.warn('[image-normalization] sharp decode failed', {
+    console.warn('[image-normalization] sharp transcode failed', {
       message: sharpError instanceof Error ? sharpError.message : String(sharpError),
       magicBytesHex: buffer.subarray(0, 16).toString('hex'),
       fileTypeBox: buffer.length >= 12 ? buffer.toString('ascii', 4, 12) : null,
@@ -49,9 +59,13 @@ async function decodeInputBuffer(buffer: Buffer): Promise<Buffer> {
     }
 
     try {
-      return await convertHeicBuffer(buffer);
+      const convertedBuffer = await convertHeicBuffer(buffer);
+      return await sharp(convertedBuffer)
+        .rotate()
+        .jpeg({ quality: 90 })
+        .toBuffer();
     } catch (heicError) {
-      console.warn('[image-normalization] heic-convert failed', {
+      console.warn('[image-normalization] heic-convert fallback failed', {
         message: heicError instanceof Error ? heicError.message : String(heicError),
         magicBytesHex: buffer.subarray(0, 16).toString('hex'),
         fileTypeBox: buffer.length >= 12 ? buffer.toString('ascii', 4, 12) : null,
@@ -59,12 +73,6 @@ async function decodeInputBuffer(buffer: Buffer): Promise<Buffer> {
       throw sharpError;
     }
   }
-}
-
-function buildJpegFilename(originalname: string | undefined, fallbackName: string): string {
-  const name = originalname?.trim() || fallbackName;
-  const baseName = name.replace(/\.[^.]+$/, '');
-  return `${baseName || fallbackName}.jpg`;
 }
 
 export async function normalizeUploadedImage(
@@ -80,20 +88,11 @@ export async function normalizeUploadedImage(
   }
 
   try {
-    console.log('[image-normalization] normalizing upload', {
-      originalname: file.originalname,
-      mimetype: file.mimetype,
-      size: file.size,
-      magicBytesHex: file.buffer.subarray(0, 16).toString('hex'),
-      fileTypeBox: file.buffer.length >= 12 ? file.buffer.toString('ascii', 4, 12) : null,
-    });
+    if (canPassThroughImage(file)) {
+      return file;
+    }
 
-    const decodedBuffer = await decodeInputBuffer(file.buffer);
-
-    const normalizedBuffer = await sharp(decodedBuffer)
-      .rotate()
-      .jpeg({ quality: 90 })
-      .toBuffer();
+    const normalizedBuffer = await transcodeImageBuffer(file.buffer);
 
     return {
       ...file,

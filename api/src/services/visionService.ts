@@ -115,6 +115,22 @@ class VisionService {
     });
   }
 
+  private formatVisionAnalyzeError(error: any): string {
+    if (error.response?.data?.message) {
+      return error.response.data.message;
+    }
+
+    if (error.code === 'ECONNREFUSED') {
+      return 'Vision service is unavailable';
+    }
+
+    if (error.code === 'ECONNABORTED') {
+      return 'Vision service timed out';
+    }
+
+    return error.message || 'Failed to analyze boards';
+  }
+
   async generateFeedbackArtifacts(
     corrections: VisionFeedbackArtifactRequestCorrection[],
     finalImageDetections: VisionFeedbackArtifactRequestDetections,
@@ -233,19 +249,10 @@ async analyzeBoards(
       };
     }
 
-    const normalizedMyBoardFile = await normalizeUploadedImage(
-      myBoardFile,
-      'myBoard'
-    );
-    const normalizedSharedBoardFile = await normalizeUploadedImage(
-      sharedBoardFile,
-      'sharedBoard'
-    );
-
-    const isHealthy = await this.healthCheck();
-    if (!isHealthy) {
-      throw new Error('Vision server is not responding');
-    }
+    const [normalizedMyBoardFile, normalizedSharedBoardFile] = await Promise.all([
+      normalizeUploadedImage(myBoardFile, 'myBoard'),
+      normalizeUploadedImage(sharedBoardFile, 'sharedBoard'),
+    ]);
 
     const formData = new FormData();
 
@@ -277,10 +284,7 @@ async analyzeBoards(
 
     return {
       success: false,
-      message:
-        error.response?.data?.message ||
-        error.message ||
-        'Failed to analyze boards',
+      message: this.formatVisionAnalyzeError(error),
       data: null,
     };
    }
