@@ -17,36 +17,34 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import UploadCard from '@/components/upload-card';
 import { useAuth } from '@/context/AuthContext';
+import { prepareImageForUpload } from '@/services/imagePreparation';
 import { apiService } from '@/services/api';
+import { PreparedUploadImage } from '@/types/rummikub';
 
 export default function HomeScreen() {
   const router = useRouter();
   const { logout } = useAuth();
-  const [myBoardImages, setMyBoardImages] = useState<string[]>([]);
-  const [sharedBoardImages, setSharedBoardImages] = useState<string[]>([]);
+  const [myBoardImages, setMyBoardImages] = useState<PreparedUploadImage[]>([]);
+  const [sharedBoardImages, setSharedBoardImages] = useState<PreparedUploadImage[]>([]);
   const [analyzeButtonScale] = useState(new Animated.Value(1));
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [showPickerForType, setShowPickerForType] = useState<'myBoard' | 'shared' | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [analysisResults, setAnalysisResults] = useState<any | null>(null);
 
-  const logSelectedAsset = (source: 'camera' | 'gallery', type: 'myBoard' | 'shared', asset: ImagePicker.ImagePickerAsset) => {
-    console.log('[image-picker] selected asset', {
-      source,
-      type,
-      width: asset.width,
-      height: asset.height,
-      uri: asset.uri,
-    });
+  const addPreparedImage = (type: 'myBoard' | 'shared', preparedImage: PreparedUploadImage) => {
+    if (type === 'myBoard') {
+      setMyBoardImages((currentImages) => [...currentImages, preparedImage]);
+      return;
+    }
+
+    setSharedBoardImages((currentImages) => [...currentImages, preparedImage]);
   };
 
   const handleUploadMyBoard = () => {
     if (Platform.OS === 'web') {
       setShowPickerForType('myBoard');
     } else {
-      showImagePickerOptions((uri) => {
-        setMyBoardImages([...myBoardImages, uri]);
-      });
+      showImagePickerOptions('myBoard');
     }
   };
 
@@ -54,9 +52,7 @@ export default function HomeScreen() {
     if (Platform.OS === 'web') {
       setShowPickerForType('shared');
     } else {
-      showImagePickerOptions((uri) => {
-        setSharedBoardImages([...sharedBoardImages, uri]);
-      });
+      showImagePickerOptions('shared');
     }
   };
 
@@ -65,18 +61,14 @@ export default function HomeScreen() {
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsEditing: false,
-        quality: 0.8,
+        quality: 0.9,
+        preferredAssetRepresentationMode: ImagePicker.UIImagePickerPreferredAssetRepresentationMode.Compatible,
       });
 
       if (!result.canceled && result.assets.length > 0) {
         const asset = result.assets[0];
-        logSelectedAsset('gallery', type, asset);
-        const uri = asset.uri;
-        if (type === 'myBoard') {
-          setMyBoardImages([...myBoardImages, uri]);
-        } else {
-          setSharedBoardImages([...sharedBoardImages, uri]);
-        }
+        const preparedImage = await prepareImageForUpload(asset, type, 'gallery');
+        addPreparedImage(type, preparedImage);
       }
       setShowPickerForType(null);
     } catch (error) {
@@ -89,18 +81,13 @@ export default function HomeScreen() {
     try {
       const result = await ImagePicker.launchCameraAsync({
         allowsEditing: false,
-        quality: 0.8,
+        quality: 0.9,
       });
 
       if (!result.canceled && result.assets.length > 0) {
         const asset = result.assets[0];
-        logSelectedAsset('camera', type, asset);
-        const uri = asset.uri;
-        if (type === 'myBoard') {
-          setMyBoardImages([...myBoardImages, uri]);
-        } else {
-          setSharedBoardImages([...sharedBoardImages, uri]);
-        }
+        const preparedImage = await prepareImageForUpload(asset, type, 'camera');
+        addPreparedImage(type, preparedImage);
       }
       setShowPickerForType(null);
     } catch (error) {
@@ -109,7 +96,7 @@ export default function HomeScreen() {
     }
   };
 
-  const showImagePickerOptions = async (onImagePicked: (uri: string) => void) => {
+  const showImagePickerOptions = async (type: 'myBoard' | 'shared') => {
     Alert.alert('Select Photo Source', 'Choose where to get the photo', [
       {
         text: 'Camera',
@@ -118,12 +105,12 @@ export default function HomeScreen() {
           if (permission.granted) {
             const result = await ImagePicker.launchCameraAsync({
               allowsEditing: false,
-              quality: 0.8,
+              quality: 0.9,
             });
             if (!result.canceled && result.assets.length > 0) {
               const asset = result.assets[0];
-              logSelectedAsset('camera', showPickerForType ?? 'myBoard', asset);
-              onImagePicked(asset.uri);
+              const preparedImage = await prepareImageForUpload(asset, type, 'camera');
+              addPreparedImage(type, preparedImage);
             }
           } else {
             Alert.alert(
@@ -140,12 +127,13 @@ export default function HomeScreen() {
           if (permission.granted) {
             const result = await ImagePicker.launchImageLibraryAsync({
               allowsEditing: false,
-              quality: 0.8,
+              quality: 0.9,
+              preferredAssetRepresentationMode: ImagePicker.UIImagePickerPreferredAssetRepresentationMode.Compatible,
             });
             if (!result.canceled && result.assets.length > 0) {
               const asset = result.assets[0];
-              logSelectedAsset('gallery', showPickerForType ?? 'myBoard', asset);
-              onImagePicked(asset.uri);
+              const preparedImage = await prepareImageForUpload(asset, type, 'gallery');
+              addPreparedImage(type, preparedImage);
             }
           } else {
             Alert.alert(
@@ -179,7 +167,6 @@ export default function HomeScreen() {
 
     try {
       setIsAnalyzing(true);
-      setAnalysisResults(null);
       
       // Send images to API for board analysis
       const result = await apiService.analyzeBoards(
@@ -187,7 +174,6 @@ export default function HomeScreen() {
         sharedBoardImages[0]
       );
 
-      setAnalysisResults(result);
       if (result.success) {
         const gameState = result.data?.gameState;
         const rackRows = result.data?.rackRows;
@@ -205,14 +191,14 @@ export default function HomeScreen() {
         }
 
         router.push({
-          pathname: '/(main)/review',
+          pathname: '/(main)/review' as any,
           params: {
             gameState: JSON.stringify(gameState),
             rackRows: JSON.stringify(rackRows ?? []),
             rackDetections: JSON.stringify(rackDetections ?? []),
             boardDetections: JSON.stringify(boardDetections ?? []),
-            rackImageUri: myBoardImages[0] ?? '',
-            boardImageUri: sharedBoardImages[0] ?? '',
+            rackImageUri: myBoardImages[0]?.uri ?? '',
+            boardImageUri: sharedBoardImages[0]?.uri ?? '',
             classifierModelVersion: classifierModelVersion ?? '',
             detectorModelVersion: detectorModelVersion ?? '',
           },
@@ -321,13 +307,13 @@ export default function HomeScreen() {
           <View style={styles.cardsContainer}>
             <UploadCard
               title="My Board"
-              images={myBoardImages}
+              images={myBoardImages.map((image) => image.uri)}
               onPress={handleUploadMyBoard}
               onRemoveImage={(index) => removeImage('myBoard', index)}
             />
             <UploadCard
               title="Shared Board"
-              images={sharedBoardImages}
+              images={sharedBoardImages.map((image) => image.uri)}
               onPress={handleUploadSharedBoard}
               onRemoveImage={(index) => removeImage('shared', index)}
             />
@@ -432,109 +418,6 @@ export default function HomeScreen() {
               </LinearGradient>
             </Animated.View>
           </Pressable>
-          
-                    {/* Temporary Review Screen Button */}
-          <Pressable
-            onPress={() => router.push('/(main)/review')}
-            style={({ pressed }) => [
-              styles.reviewButton,
-              pressed && styles.reviewButtonPressed,
-            ]}
-          >
-            <Ionicons name="create" size={20} color="#ffffff" style={{ marginRight: 8 }} />
-            <Text style={styles.reviewButtonText}>Open Review Screen</Text>
-          </Pressable>
-
-          {/* Analysis Results */}
-          {analysisResults && analysisResults.success && (
-            <>
-              {/* My Board Results */}
-              {analysisResults.data?.myBoardDetections && analysisResults.data.myBoardDetections.length > 0 && (
-                <View style={styles.resultsContainer}>
-                  <View style={styles.resultsHeader}>
-                    <Ionicons name="checkmark-circle" size={24} color="#10b981" />
-                    <Text style={styles.resultsTitle}>My Board - {analysisResults.data.myBoardDetections.length} Tiles</Text>
-                  </View>
-                  <ScrollView
-                    horizontal
-                    showsHorizontalScrollIndicator={false}
-                    style={styles.tilesScroll}
-                  >
-                    {analysisResults.data.myBoardDetections.map((tile: any, idx: number) => (
-                      <View key={`myboard-${idx}`} style={styles.tileResult}>
-                        <View
-                          style={[
-                            styles.tileNumber,
-                            {
-                              backgroundColor:
-                                tile.tile_color === 'red'
-                                  ? '#ef4444'
-                                  : tile.tile_color === 'blue'
-                                  ? '#3b82f6'
-                                  : tile.tile_color === 'yellow'
-                                  ? '#fbbf24'
-                                  : '#000000',
-                            },
-                          ]}
-                        >
-                          <Text style={styles.tileValue}>
-                            {tile.tile_number || '?'}
-                          </Text>
-                        </View>
-                        <Text style={styles.tileColor}>{tile.tile_color}</Text>
-                        <Text style={styles.tileConfidence}>
-                          {(tile.confidence * 100).toFixed(0)}%
-                        </Text>
-                      </View>
-                    ))}
-                  </ScrollView>
-                </View>
-              )}
-
-              {/* Shared Board Results */}
-              {analysisResults.data?.sharedBoardDetections && analysisResults.data.sharedBoardDetections.length > 0 && (
-                <View style={styles.resultsContainer}>
-                  <View style={styles.resultsHeader}>
-                    <Ionicons name="checkmark-circle" size={24} color="#10b981" />
-                    <Text style={styles.resultsTitle}>Shared Board - {analysisResults.data.sharedBoardDetections.length} Tiles</Text>
-                  </View>
-                  <ScrollView
-                    horizontal
-                    showsHorizontalScrollIndicator={false}
-                    style={styles.tilesScroll}
-                  >
-                    {analysisResults.data.sharedBoardDetections.map((tile: any, idx: number) => (
-                      <View key={`shared-${idx}`} style={styles.tileResult}>
-                        <View
-                          style={[
-                            styles.tileNumber,
-                            {
-                              backgroundColor:
-                                tile.tile_color === 'red'
-                                  ? '#ef4444'
-                                  : tile.tile_color === 'blue'
-                                  ? '#3b82f6'
-                                  : tile.tile_color === 'yellow'
-                                  ? '#fbbf24'
-                                  : '#000000',
-                            },
-                          ]}
-                        >
-                          <Text style={styles.tileValue}>
-                            {tile.tile_number || '?'}
-                          </Text>
-                        </View>
-                        <Text style={styles.tileColor}>{tile.tile_color}</Text>
-                        <Text style={styles.tileConfidence}>
-                          {(tile.confidence * 100).toFixed(0)}%
-                        </Text>
-                      </View>
-                    ))}
-                  </ScrollView>
-                </View>
-              )}
-            </>
-          )}
 
           {/* Info Section */}
           <View style={styles.infoSection}>
@@ -669,25 +552,6 @@ const styles = StyleSheet.create({
     opacity: 0.6,
   },
 
-    reviewButton: {
-    backgroundColor: 'rgba(245, 158, 11, 0.9)',
-    borderRadius: 16,
-    paddingVertical: 14,
-    paddingHorizontal: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexDirection: 'row',
-    marginBottom: 24,
-  },
-  reviewButtonPressed: {
-    opacity: 0.85,
-  },
-  reviewButtonText: {
-    color: '#ffffff',
-    fontSize: 16,
-    fontWeight: '700',
-  },
-
   infoSection: {
     backgroundColor: 'rgba(79, 141, 253, 0.08)',
     borderRadius: 12,
@@ -765,57 +629,5 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     color: '#9ca3af',
     textAlign: 'center',
-  },
-  resultsContainer: {
-    backgroundColor: 'rgba(16, 185, 129, 0.1)',
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 24,
-    borderWidth: 1,
-    borderColor: 'rgba(16, 185, 129, 0.3)',
-  },
-  resultsHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  resultsTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#10b981',
-    marginLeft: 8,
-  },
-  tilesScroll: {
-    flexDirection: 'row',
-  },
-  tileResult: {
-    alignItems: 'center',
-    marginRight: 16,
-    paddingVertical: 12,
-  },
-  tileNumber: {
-    width: 56,
-    height: 56,
-    borderRadius: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  tileValue: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: '#ffffff',
-  },
-  tileColor: {
-    fontSize: 12,
-    color: '#86efac',
-    fontWeight: '500',
-    marginBottom: 4,
-    textTransform: 'capitalize',
-  },
-  tileConfidence: {
-    fontSize: 11,
-    color: '#a1f3d1',
-    fontWeight: '400',
   },
 });

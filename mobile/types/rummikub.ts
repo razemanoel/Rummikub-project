@@ -101,6 +101,15 @@ export interface VisionFeedbackPayload {
   };
 }
 
+export interface PreparedUploadImage {
+  uri: string;
+  mimeType: 'image/jpeg';
+  fileName: string;
+  width: number;
+  height: number;
+  fileSize: number | null;
+}
+
 export interface TileSet {
   tiles: Tile[];
 }

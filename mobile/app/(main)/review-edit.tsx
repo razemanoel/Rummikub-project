@@ -41,157 +41,13 @@ import {
 } from '@/components/review/reviewTypes';
 import { apiService } from '@/services/api';
 
-const mockGameState: GameState = {
-  rack: [
-    { value: null, color: null, is_joker: true },
-
-    { value: 8, color: 'red', is_joker: false },
-    { value: 8, color: 'blue', is_joker: false },
-
-    { value: 6, color: 'red', is_joker: false },
-    { value: 7, color: 'red', is_joker: false },
-    { value: 8, color: 'red', is_joker: false },
-
-    { value: 12, color: 'blue', is_joker: false },
-    { value: 13, color: 'blue', is_joker: false },
-
-    { value: 4, color: 'yellow', is_joker: false },
-    { value: 5, color: 'yellow', is_joker: false },
-
-    { value: 12, color: 'black', is_joker: false },
-  ],
-
-  board: [
-    {
-      tiles: [
-        { value: 8, color: 'black', is_joker: false },
-        { value: 9, color: 'black', is_joker: false },
-        { value: 10, color: 'black', is_joker: false },
-      ],
-    },
-    {
-      tiles: [
-        { value: 11, color: 'black', is_joker: false },
-        { value: 12, color: 'black', is_joker: false },
-        { value: 13, color: 'black', is_joker: false },
-      ],
-    },
-    {
-      tiles: [
-        { value: 3, color: 'blue', is_joker: false },
-        { value: 4, color: 'blue', is_joker: false },
-        { value: 5, color: 'blue', is_joker: false },
-        { value: 6, color: 'blue', is_joker: false },
-      ],
-    },
-    {
-      tiles: [
-        { value: 9, color: 'red', is_joker: false },
-        { value: 10, color: 'red', is_joker: false },
-        { value: 11, color: 'red', is_joker: false },
-        { value: 12, color: 'red', is_joker: false },
-      ],
-    },
-    {
-      tiles: [
-        { value: 4, color: 'black', is_joker: false },
-        { value: 4, color: 'blue', is_joker: false },
-        { value: 4, color: 'red', is_joker: false },
-      ],
-    },
-    {
-      tiles: [
-        { value: 7, color: 'yellow', is_joker: false },
-        { value: 8, color: 'yellow', is_joker: false },
-        { value: 9, color: 'yellow', is_joker: false },
-      ],
-    },
-  ],
+const EMPTY_GAME_STATE: GameState = {
+  rack: [],
+  board: [],
 };
 
 type InitialRackRowItem = {
   tile?: Tile;
-};
-
-const detectionCenterY = (detection: VisionDetection) => (
-  detection.bbox.y + (detection.bbox.height / 2)
-);
-
-const detectionCenterX = (detection: VisionDetection) => (
-  detection.bbox.x + (detection.bbox.width / 2)
-);
-
-const groupBoardDetectionsIntoRows = (
-  detections: VisionDetection[],
-  rowToleranceRatio = 0.6,
-) => {
-  if (detections.length === 0) {
-    return [] as VisionDetection[][];
-  }
-
-  const sortedDetections = [...detections].sort(
-    (left, right) => detectionCenterY(left) - detectionCenterY(right)
-  );
-  const averageHeight = sortedDetections.reduce(
-    (sum, detection) => sum + detection.bbox.height,
-    0,
-  ) / sortedDetections.length;
-  const rowTolerance = averageHeight * rowToleranceRatio;
-  const rows: VisionDetection[][] = [];
-
-  sortedDetections.forEach((detection) => {
-    const detectionY = detectionCenterY(detection);
-    const matchingRow = rows.find((row) => {
-      const rowCenter = row.reduce((sum, item) => sum + detectionCenterY(item), 0) / row.length;
-      return Math.abs(detectionY - rowCenter) <= rowTolerance;
-    });
-
-    if (matchingRow) {
-      matchingRow.push(detection);
-      matchingRow.sort((left, right) => detectionCenterX(left) - detectionCenterX(right));
-      return;
-    }
-
-    rows.push([detection]);
-  });
-
-  return rows.sort((left, right) => {
-    const leftCenter = left.reduce((sum, item) => sum + detectionCenterY(item), 0) / left.length;
-    const rightCenter = right.reduce((sum, item) => sum + detectionCenterY(item), 0) / right.length;
-    return leftCenter - rightCenter;
-  });
-};
-
-const splitBoardDetectionRowIntoSets = (
-  row: VisionDetection[],
-  gapRatio = 1.3,
-) => {
-  if (row.length <= 1) {
-    return row.length === 0 ? [] as VisionDetection[][] : [row];
-  }
-
-  const averageWidth = row.reduce((sum, detection) => sum + detection.bbox.width, 0) / row.length;
-  const maxSameSetGap = averageWidth * gapRatio;
-  const sets: VisionDetection[][] = [];
-  let currentSet: VisionDetection[] = [row[0]];
-
-  row.slice(1).forEach((currentDetection, index) => {
-    const previousDetection = row[index];
-    const previousRight = previousDetection.bbox.x + previousDetection.bbox.width;
-    const currentLeft = currentDetection.bbox.x;
-    const gap = currentLeft - previousRight;
-
-    if (gap > maxSameSetGap) {
-      sets.push(currentSet);
-      currentSet = [currentDetection];
-      return;
-    }
-
-    currentSet.push(currentDetection);
-  });
-
-  sets.push(currentSet);
-  return sets;
 };
 
 const buildInitialRackReviewTiles = (
@@ -222,30 +78,56 @@ const buildInitialBoardReviewState = (
   board: TileSet[],
   boardDetections: VisionDetection[],
 ): ReviewTileSetState[] => {
-  if (boardDetections.length > 0) {
-    const rows = groupBoardDetectionsIntoRows(boardDetections);
+  const candidateDetections = boardDetections.filter((detection) => detection.source === 'board');
+  const flattenedBoardTiles = board.flatMap((tileSet) => tileSet.tiles);
+  const hasExactFlatOrderMatch = (
+    flattenedBoardTiles.length === candidateDetections.length
+    && flattenedBoardTiles.every((tile, index) => {
+      const detection = candidateDetections[index];
+      return !!detection && areTilesEqual(tile, detection.tile);
+    })
+  );
+  const unmatchedDetectionIndexes = new Set(candidateDetections.map((_, index) => index));
+  let flatTileIndex = 0;
 
-    return rows.flatMap((row, rowIndex) => (
-      splitBoardDetectionRowIntoSets(row).map((tileSet, setIndex) => ({
-        id: `board-set-${rowIndex}-${setIndex}`,
-        tiles: tileSet.map((detection) => buildReviewTileState(
-          detection.tile,
-          'board',
-          detection.index,
-          `board-detected-${detection.index}`,
-          detection,
-        )),
-      }))
+  const takeDetectionForTile = (tile: Tile, currentFlatIndex: number) => {
+    if (hasExactFlatOrderMatch) {
+      unmatchedDetectionIndexes.delete(currentFlatIndex);
+      return candidateDetections[currentFlatIndex];
+    }
+
+    const preferredDetection = candidateDetections[currentFlatIndex];
+
+    if (
+      preferredDetection
+      && unmatchedDetectionIndexes.has(currentFlatIndex)
+      && areTilesEqual(tile, preferredDetection.tile)
+    ) {
+      unmatchedDetectionIndexes.delete(currentFlatIndex);
+      return preferredDetection;
+    }
+
+    const matchingIndexes = [...unmatchedDetectionIndexes].filter((index) => (
+      areTilesEqual(tile, candidateDetections[index].tile)
     ));
-  }
 
-  let detectionCursor = 0;
+    if (matchingIndexes.length === 1) {
+      const matchingIndex = matchingIndexes[0];
+      unmatchedDetectionIndexes.delete(matchingIndex);
+      return candidateDetections[matchingIndex];
+    }
+
+    return undefined;
+  };
 
   return board.map((tileSet, setIndex) => ({
     id: `board-set-${setIndex}`,
     tiles: tileSet.tiles.map((tile, tileIndex) => {
-      const detection = boardDetections[detectionCursor++];
-      const feedbackTileIndex = detection?.index ?? detectionCursor + tileIndex;
+      const currentFlatIndex = flatTileIndex;
+      const detection = takeDetectionForTile(tile, currentFlatIndex);
+      const feedbackTileIndex = detection?.index ?? currentFlatIndex;
+
+      flatTileIndex += 1;
 
       return buildReviewTileState(
         tile,
@@ -286,7 +168,7 @@ export default function ReviewScreen() {
 
 const initialGameState: GameState = params.gameState
   ? JSON.parse(params.gameState as string)
-  : mockGameState;
+  : EMPTY_GAME_STATE;
 
 const initialRackRows = params.rackRows
   ? JSON.parse(params.rackRows as string)

@@ -11,6 +11,7 @@ import {
 } from '@/types/auth';
 import {
   GameState,
+  PreparedUploadImage,
   SolveILPResponse,
   VisionAnalyzeResponse,
   VisionFeedbackPayload,
@@ -150,33 +151,27 @@ class ApiService {
 
 // Vision APIs
 async analyzeBoards(
-  myBoardUri?: string,
-  sharedBoardUri?: string
+  myBoardImage?: PreparedUploadImage,
+  sharedBoardImage?: PreparedUploadImage
 ): Promise<ApiResponse<VisionAnalyzeResponse>> {
   try {
     const formData = new FormData();
 
-    const getMimeType = (uri: string) => {
-      if (uri.endsWith('.png')) return 'image/png';
-      if (uri.endsWith('.jpg') || uri.endsWith('.jpeg')) return 'image/jpeg';
-      return 'image/jpeg';
-    };
-
     // Add myBoard image if provided
-    if (myBoardUri) {
+    if (myBoardImage) {
       formData.append('myBoard', {
-        uri: myBoardUri,
-        type: getMimeType(myBoardUri),
-        name: 'myBoard.jpg',
+        uri: myBoardImage.uri,
+        type: myBoardImage.mimeType,
+        name: myBoardImage.fileName,
       } as any);
     }
 
     // Add sharedBoard image if provided
-    if (sharedBoardUri) {
+    if (sharedBoardImage) {
       formData.append('sharedBoard', {
-        uri: sharedBoardUri,
-        type: getMimeType(sharedBoardUri),
-        name: 'sharedBoard.jpg',
+        uri: sharedBoardImage.uri,
+        type: sharedBoardImage.mimeType,
+        name: sharedBoardImage.fileName,
       } as any);
     }
 
