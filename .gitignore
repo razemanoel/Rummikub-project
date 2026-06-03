@@ -66,6 +66,11 @@ __pycache__/
 # Pytest
 .pytest_cache/
 
+# Local vision debug outputs
+backend/vision/debug_artifacts/
+backend/vision/batch_results/
+backend/vision/debug_summaries/
+
 # Virtual environments
 venv/
 .venv/
