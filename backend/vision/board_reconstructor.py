@@ -160,38 +160,6 @@ def sort_rack_detections(
 
     return sorted_detections
 
-def split_row_into_sets(
-    row: list[dict[str, Any]],
-    gap_ratio: float = 1.3,
-) -> list[list[dict[str, Any]]]:
-    if not row:
-        return []
-
-    if len(row) == 1:
-        return [row]
-
-    average_width = sum(bbox_width(item) for item in row) / len(row)
-    max_same_set_gap = average_width * gap_ratio
-
-    sets: list[list[dict[str, Any]]] = []
-    current_set = [row[0]]
-
-    for previous, current in zip(row, row[1:]):
-        previous_right = previous["bbox"]["x2"]
-        current_left = current["bbox"]["x1"]
-        gap = current_left - previous_right
-
-        if gap > max_same_set_gap:
-            sets.append(current_set)
-            current_set = [current]
-        else:
-            current_set.append(current)
-
-    sets.append(current_set)
-
-    return sets
-
-
 def build_rack_from_detections(detections: list[dict[str, Any]]) -> list[Tile]:
     sorted_detections = sort_rack_detections(detections)
 

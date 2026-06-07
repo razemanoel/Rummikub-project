@@ -252,67 +252,17 @@ def board_duplicate_reason(metrics: dict[str, float]) -> str | None:
     return None
 
 
-def serialize_detection(detection: dict[str, Any]) -> dict[str, Any]:
-    return {
-        "bbox": detection["bbox"],
-        "detector_confidence": round(float(detection["detector_confidence"]), 4),
-    }
-
-
 def suppress_board_duplicate_detections(
     detections: list[dict[str, Any]],
-) -> tuple[list[dict[str, Any]], list[dict[str, Any]], dict[str, int]]:
-    kept_with_indices: list[tuple[int, dict[str, Any]]] = []
-    suppression_events: list[dict[str, Any]] = []
-    reason_counts = {
-        "high_iou": 0,
-        "center_size_match": 0,
-        "containment_match": 0,
-        "hybrid_match": 0,
-    }
+) -> list[dict[str, Any]]:
+    kept: list[dict[str, Any]] = []
 
-    ranked_detections = sorted(
-        enumerate(detections),
-        key=lambda item: item[1]["detector_confidence"],
-        reverse=True,
-    )
+    for detection in sorted(detections, key=lambda item: item["detector_confidence"], reverse=True):
+        if not any(board_duplicate_reason(board_duplicate_metrics(detection, kept_detection)) is not None for kept_detection in kept):
+            kept.append(detection)
 
-    for raw_index, detection in ranked_detections:
-        suppressed = False
-
-        for kept_index, kept_detection in kept_with_indices:
-            metrics = board_duplicate_metrics(detection, kept_detection)
-            reason = board_duplicate_reason(metrics)
-            if reason is None:
-                continue
-
-            reason_counts[reason] += 1
-            suppression_events.append(
-                {
-                    "reason": reason,
-                    "kept_detection": {
-                        "raw_index": kept_index,
-                        **serialize_detection(kept_detection),
-                    },
-                    "suppressed_detection": {
-                        "raw_index": raw_index,
-                        **serialize_detection(detection),
-                    },
-                    **metrics,
-                    "kept_detector_confidence": round(float(kept_detection["detector_confidence"]), 4),
-                    "suppressed_detector_confidence": round(float(detection["detector_confidence"]), 4),
-                }
-            )
-            suppressed = True
-            break
-
-        if not suppressed:
-            kept_with_indices.append((raw_index, detection))
-
-    kept_detections = [item[1] for item in kept_with_indices]
-    kept_detections.sort(key=lambda item: (item["bbox"]["y1"], item["bbox"]["x1"]))
-
-    return kept_detections, suppression_events, reason_counts
+    kept.sort(key=lambda item: (item["bbox"]["y1"], item["bbox"]["x1"]))
+    return kept
 
 
 def bbox_iou(left_bbox: dict[str, float], right_bbox: dict[str, float]) -> float:
@@ -338,39 +288,15 @@ def bbox_iou(left_bbox: dict[str, float], right_bbox: dict[str, float]) -> float
 def deduplicate_detections(
     detections: list[dict[str, Any]],
     iou_threshold: float = 0.65,
-) -> tuple[list[dict[str, Any]], dict[int, dict[str, Any]]]:
-    kept_with_indices: list[tuple[int, dict[str, Any]]] = []
-    suppression_log: dict[int, dict[str, Any]] = {}
+) -> list[dict[str, Any]]:
+    kept: list[dict[str, Any]] = []
 
-    ranked_detections = sorted(
-        enumerate(detections),
-        key=lambda item: item[1]["detector_confidence"],
-        reverse=True,
-    )
+    for detection in sorted(detections, key=lambda item: item["detector_confidence"], reverse=True):
+        if not any(bbox_iou(detection["bbox"], kept_detection["bbox"]) >= iou_threshold for kept_detection in kept):
+            kept.append(detection)
 
-    for raw_index, detection in ranked_detections:
-        duplicate_of: int | None = None
-        duplicate_iou = 0.0
-
-        for kept_index, kept_detection in kept_with_indices:
-            overlap = bbox_iou(detection["bbox"], kept_detection["bbox"])
-            if overlap >= iou_threshold:
-                duplicate_of = kept_index
-                duplicate_iou = overlap
-                break
-
-        if duplicate_of is not None:
-            suppression_log[raw_index] = {
-                "duplicate_of": duplicate_of,
-                "iou": round(duplicate_iou, 4),
-            }
-            continue
-
-        kept_with_indices.append((raw_index, detection))
-
-    kept_with_indices.sort(key=lambda item: (item[1]["bbox"]["y1"], item[1]["bbox"]["x1"]))
-
-    return [item[1] for item in kept_with_indices], suppression_log
+    kept.sort(key=lambda item: (item["bbox"]["y1"], item["bbox"]["x1"]))
+    return kept
 
 
 def merge_overlapping_detections(
@@ -444,21 +370,14 @@ def collect_board_raw_detections(
     image: Image.Image,
     detector_confidence: float,
     source: str,
-) -> tuple[list[dict[str, Any]], dict[str, int]]:
+) -> list[dict[str, Any]]:
     collected_detections = detect_tiles_in_memory(
         image=image,
         detector_confidence=detector_confidence,
         source=source,
     )
-
-    merged_detections = merge_overlapping_detections(
-        collected_detections,
-        iou_threshold=0.35,
-    )
-    return merged_detections, {
-        "raw_detection_count": len(collected_detections),
-        "merged_detection_count": len(merged_detections),
-    }
+    # TODO: iou_threshold=0.35 may be aggressive for tightly spaced board tiles — revisit if adjacent tiles get merged
+    return merge_overlapping_detections(collected_detections, iou_threshold=0.35)
 
 
 def classify_detections(
@@ -467,47 +386,35 @@ def classify_detections(
     bbox_offset: tuple[float, float] = (0.0, 0.0),
     require_dark_support: bool = False,
     rack_support_mask: np.ndarray | None = None,
-    source: str = "unknown",
-) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    min_classifier_confidence: float = 0.2,
+) -> list[dict[str, Any]]:
     analyzed_tiles: list[dict[str, Any]] = []
     offset_x, offset_y = bbox_offset
     image_array = np.array(image.convert("RGB")) if require_dark_support else None
-    filter_log: list[dict[str, Any]] = []
-    pending_detections: list[tuple[dict[str, Any], dict[str, Any]]] = []
+    pending_detections: list[dict[str, Any]] = []
     crops: list[Image.Image] = []
 
-    for raw_index, detection in enumerate(raw_detections):
+    for detection in raw_detections:
         bbox = detection["bbox"]
-        debug_item: dict[str, Any] = {
-            "raw_index": raw_index,
-            "bbox": bbox,
-            "detector_confidence": detection["detector_confidence"],
-            "dropped_reasons": [],
-        }
 
-        if require_dark_support and image_array is not None and not has_dark_rack_support(image_array, bbox):
-            debug_item["dropped_reasons"].append("no_dark_rack_support")
-            filter_log.append(debug_item)
+        dark_support_confirmed = False
+        if require_dark_support and image_array is not None:
+            dark_support_confirmed = has_dark_rack_support(image_array, bbox)
+
+        if rack_support_mask is not None and not dark_support_confirmed and not has_rack_support_overlap(rack_support_mask, bbox):
             continue
 
-        if rack_support_mask is not None and not has_rack_support_overlap(rack_support_mask, bbox):
-            debug_item["dropped_reasons"].append("outside_rack_region")
-            filter_log.append(debug_item)
-            continue
-
-        pending_detections.append((detection, debug_item))
+        pending_detections.append(detection)
         crops.append(crop_image_by_bbox(image, bbox))
 
     classifications = classify_tile_crops(crops)
 
-    for (detection, debug_item), classification in zip(pending_detections, classifications):
+    for detection, classification in zip(pending_detections, classifications):
+        if classification["classifier_confidence"] < min_classifier_confidence:
+            continue
+
         bbox = detection["bbox"]
         tile = detection_to_tile(classification)
-        debug_item["class_name"] = classification["class_name"]
-        debug_item["classifier_confidence"] = classification["classifier_confidence"]
-        debug_item["tile"] = tile.model_dump(mode="json")
-        debug_item["status"] = "kept"
-
         analyzed_tiles.append(
             {
                 "index": len(analyzed_tiles),
@@ -523,20 +430,8 @@ def classify_detections(
                 ),
             }
         )
-        filter_log.append(debug_item)
 
-    return analyzed_tiles, filter_log
-
-
-def build_fallback_rack_bbox(image: Image.Image) -> dict[str, float]:
-    image_width, image_height = image.size
-
-    return {
-        "x1": float(image_width * 0.04),
-        "y1": float(image_height * 0.34),
-        "x2": float(image_width * 0.96),
-        "y2": float(image_height * 0.98),
-    }
+    return analyzed_tiles
 
 
 def has_dark_rack_support(image_array: np.ndarray, bbox: dict[str, float]) -> bool:
@@ -600,48 +495,6 @@ def has_rack_support_overlap(support_mask: np.ndarray, bbox: dict[str, float]) -
     return bottom_center_supported or overlap_ratio >= 0.12
 
 
-def looks_like_rummikub_tile_crop(crop: Image.Image) -> bool:
-    crop_array = np.array(crop.convert("RGB"))
-    if crop_array.size == 0:
-        return False
-
-    luminance = (
-        (0.299 * crop_array[:, :, 0])
-        + (0.587 * crop_array[:, :, 1])
-        + (0.114 * crop_array[:, :, 2])
-    )
-    color_spread = (
-        crop_array.max(axis=2).astype(np.float32)
-        - crop_array.min(axis=2).astype(np.float32)
-    )
-
-    neutral_bright_mask = (luminance >= 150) & (color_spread <= 60)
-    neutral_bright_ratio = float(np.mean(neutral_bright_mask))
-
-    crop_height, crop_width = crop_array.shape[:2]
-    center_y1 = int(crop_height * 0.18)
-    center_y2 = max(center_y1 + 1, int(crop_height * 0.82))
-    center_x1 = int(crop_width * 0.12)
-    center_x2 = max(center_x1 + 1, int(crop_width * 0.88))
-    center_region = crop_array[center_y1:center_y2, center_x1:center_x2]
-
-    if center_region.size == 0:
-        return False
-
-    center_luminance = (
-        (0.299 * center_region[:, :, 0])
-        + (0.587 * center_region[:, :, 1])
-        + (0.114 * center_region[:, :, 2])
-    )
-    center_spread = (
-        center_region.max(axis=2).astype(np.float32)
-        - center_region.min(axis=2).astype(np.float32)
-    )
-    center_neutral_ratio = float(np.mean((center_luminance >= 155) & (center_spread <= 55)))
-
-    return neutral_bright_ratio >= 0.16 and center_neutral_ratio >= 0.22
-
-
 def analyze_loaded_image(
     image: Image.Image,
     detector_confidence: float = 0.4,
@@ -649,39 +502,20 @@ def analyze_loaded_image(
     require_dark_support: bool = False,
     rack_support_mask: np.ndarray | None = None,
     source: str = "unknown",
-) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
+) -> list[dict[str, Any]]:
     raw_detections = detect_tiles_in_memory(
         image=image,
         detector_confidence=detector_confidence,
         source=source,
     )
-    detections, suppression_log = deduplicate_detections(raw_detections)
-    filter_log: list[dict[str, Any]] = []
-
-    for raw_index, raw_detection in enumerate(raw_detections):
-        if raw_index in suppression_log:
-            filter_log.append(
-                {
-                    "raw_index": raw_index,
-                    "bbox": raw_detection["bbox"],
-                    "detector_confidence": raw_detection["detector_confidence"],
-                    "dropped_reasons": ["duplicate_bbox"],
-                    "duplicate_of": suppression_log[raw_index]["duplicate_of"],
-                    "duplicate_iou": suppression_log[raw_index]["iou"],
-                }
-            )
-
-    analyzed_tiles, classification_log = classify_detections(
+    detections = deduplicate_detections(raw_detections)
+    return classify_detections(
         image=image,
         raw_detections=detections,
         bbox_offset=bbox_offset,
         require_dark_support=require_dark_support,
         rack_support_mask=rack_support_mask,
-        source=source,
     )
-    filter_log.extend(classification_log)
-
-    return analyzed_tiles, raw_detections, filter_log
 
 
 def analyze_image(
@@ -696,21 +530,13 @@ def analyze_image(
 
     image = load_image_rgb(image_file)
 
-    merged_detections, board_detection_stats = collect_board_raw_detections(
+    merged_detections = collect_board_raw_detections(
         image=image,
         detector_confidence=detector_confidence,
         source=source,
     )
-    suppressed_detections, suppression_events, suppression_reason_counts = suppress_board_duplicate_detections(
-        merged_detections,
-    )
-
-    analyzed_tiles, _ = classify_detections(
-        image=image,
-        raw_detections=suppressed_detections,
-        source=source,
-    )
-    return analyzed_tiles
+    suppressed_detections = suppress_board_duplicate_detections(merged_detections)
+    return classify_detections(image=image, raw_detections=suppressed_detections)
 
 
 def analyze_rack_image(
@@ -725,10 +551,14 @@ def analyze_rack_image(
 
     image = load_image_rgb(image_file)
     rack_region = detect_rack_region(image)
-    rack_bbox = rack_region.bbox if rack_region is not None else None
 
-    if rack_bbox is None:
-        rack_bbox = build_fallback_rack_bbox(image)
+    if rack_region is not None:
+        rack_bbox = rack_region.bbox
+        rack_crop = crop_image_by_bbox(image, rack_bbox)
+        bbox_offset = (rack_bbox["x1"], rack_bbox["y1"])
+    else:
+        rack_crop = image
+        bbox_offset = (0.0, 0.0)
 
     rack_support_mask = None
     if rack_region is not None:
@@ -738,27 +568,11 @@ def analyze_rack_image(
         y2 = min(rack_region.front_support_mask.shape[0], int(round(rack_bbox["y2"])))
         rack_support_mask = rack_region.front_support_mask[y1:y2, x1:x2]
 
-    rack_crop = crop_image_by_bbox(image, rack_bbox)
-    analyzed_tiles, raw_detections, filter_log = analyze_loaded_image(
+    return analyze_loaded_image(
         image=rack_crop,
         detector_confidence=detector_confidence,
-        bbox_offset=(rack_bbox["x1"], rack_bbox["y1"]),
-        require_dark_support=rack_region is not None,
+        bbox_offset=bbox_offset,
+        require_dark_support=True,
         rack_support_mask=rack_support_mask,
         source=source,
     )
-
-    dropped_reason_counts: dict[str, int] = {}
-    kept_count = 0
-
-    for item in filter_log:
-        dropped_reasons = item.get("dropped_reasons", [])
-        if dropped_reasons:
-            for reason in dropped_reasons:
-                dropped_reason_counts[reason] = dropped_reason_counts.get(reason, 0) + 1
-            continue
-
-        if item.get("status") == "kept":
-            kept_count += 1
-
-    return analyzed_tiles

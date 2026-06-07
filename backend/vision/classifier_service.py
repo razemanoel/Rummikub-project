@@ -95,10 +95,6 @@ def parse_class_name(class_name: str) -> dict[str, Any]:
     }
 
 
-def classify_tile_crop(crop: Image.Image) -> dict[str, Any]:
-    return classify_tile_crops([crop])[0]
-
-
 def classify_tile_crops(crops: list[Image.Image]) -> list[dict[str, Any]]:
     if not crops:
         return []

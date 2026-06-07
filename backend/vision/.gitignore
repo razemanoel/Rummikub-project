@@ -8,6 +8,10 @@ test_images/
 detection_dataset/images/
 detection_dataset/labels/
 
+evaluate_detector_edge_cases.py
+
+models/detector_best_old.pt
+
 # trained / pretrained weights
 yolo*.pt
 
