@@ -397,11 +397,11 @@ def classify_detections(
     for detection in raw_detections:
         bbox = detection["bbox"]
 
-        dark_support_confirmed = False
         if require_dark_support and image_array is not None:
-            dark_support_confirmed = has_dark_rack_support(image_array, bbox)
+            if not has_dark_rack_support(image_array, bbox):
+                continue
 
-        if rack_support_mask is not None and not dark_support_confirmed and not has_rack_support_overlap(rack_support_mask, bbox):
+        if rack_support_mask is not None and not has_rack_support_overlap(rack_support_mask, bbox):
             continue
 
         pending_detections.append(detection)
@@ -581,10 +581,13 @@ def analyze_rack_image(
         rack_crop = image
         bbox_offset = (0.0, 0.0)
 
+    # Dark-support filtering is only reliable in full-image mode (rack_region is None).
+    # When a rack crop exists the tile bboxes may sit at the crop edge, leaving no
+    # visible support region below, which causes the luminance check to reject valid tiles.
     return analyze_loaded_image(
         image=rack_crop,
         detector_confidence=detector_confidence,
         bbox_offset=bbox_offset,
-        require_dark_support=True,
+        require_dark_support=rack_region is None,
         source=source,
     )
