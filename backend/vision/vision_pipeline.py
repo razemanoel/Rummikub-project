@@ -554,25 +554,37 @@ def analyze_rack_image(
 
     if rack_region is not None:
         rack_bbox = rack_region.bbox
+        _, original_height = image.size
+        crop_height = rack_bbox["y2"] - rack_bbox["y1"]
+        mask = rack_region.front_support_mask
+        active_ratio = float(np.count_nonzero(mask)) / max(mask.size, 1)
+
+        crop_unreliable = crop_height < original_height * 0.25 or active_ratio < 0.015
+        if crop_unreliable:
+            original_width, _ = image.size
+            expanded_y1 = max(0.0, rack_bbox["y2"] - int(0.60 * original_height))
+            print(
+                f"[rack] Suspicious crop (height={crop_height:.0f}px "
+                f"mask={active_ratio:.1%}) — expanding to full width, "
+                f"y1 {rack_bbox['y1']:.0f} → {expanded_y1:.0f}"
+            )
+            rack_bbox = {
+                "x1": 0.0,
+                "y1": expanded_y1,
+                "x2": float(original_width),
+                "y2": rack_bbox["y2"],
+            }
+
         rack_crop = crop_image_by_bbox(image, rack_bbox)
         bbox_offset = (rack_bbox["x1"], rack_bbox["y1"])
     else:
         rack_crop = image
         bbox_offset = (0.0, 0.0)
 
-    rack_support_mask = None
-    if rack_region is not None:
-        x1 = max(0, int(round(rack_bbox["x1"])))
-        y1 = max(0, int(round(rack_bbox["y1"])))
-        x2 = min(rack_region.front_support_mask.shape[1], int(round(rack_bbox["x2"])))
-        y2 = min(rack_region.front_support_mask.shape[0], int(round(rack_bbox["y2"])))
-        rack_support_mask = rack_region.front_support_mask[y1:y2, x1:x2]
-
     return analyze_loaded_image(
         image=rack_crop,
         detector_confidence=detector_confidence,
         bbox_offset=bbox_offset,
         require_dark_support=True,
-        rack_support_mask=rack_support_mask,
         source=source,
     )
