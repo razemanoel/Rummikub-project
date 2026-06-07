@@ -520,7 +520,7 @@ def analyze_loaded_image(
 
 def analyze_image(
     image_path: str,
-    detector_confidence: float = 0.4,
+    detector_confidence: float = 0.25,
     source: str = "board",
 ) -> list[dict[str, Any]]:
     image_file = Path(image_path)
