@@ -45,8 +45,6 @@ interface SanitizedCorrection {
     bbox: VisionFeedbackBBox;
     correctedTile: VisionFeedbackTile;
   }>;
-  affectsClassifier: boolean;
-  affectsDetector: boolean;
   classifierModelVersion: string;
   detectorModelVersion: string;
 }
@@ -222,40 +220,6 @@ class VisionFeedbackService {
     };
   }
 
-  private deriveEffects(
-    correctionType: VisionFeedbackCorrectionType,
-    originalPrediction: VisionFeedbackTile | null,
-    correctedTile: VisionFeedbackTile,
-    bbox: VisionFeedbackBBox | null,
-  ): { affectsClassifier: boolean; affectsDetector: boolean } {
-    const tileChanged = originalPrediction
-      ? !this.tilesEqual(originalPrediction, correctedTile)
-      : true;
-
-    switch (correctionType) {
-      case 'wrong_class':
-        return { affectsClassifier: Boolean(originalPrediction && bbox && tileChanged), affectsDetector: false };
-      case 'wrong_bbox':
-        return {
-          affectsClassifier: Boolean(originalPrediction && bbox && tileChanged),
-          affectsDetector: Boolean(bbox),
-        };
-      case 'both':
-        return {
-          affectsClassifier: Boolean(originalPrediction && bbox && tileChanged),
-          affectsDetector: Boolean(bbox),
-        };
-      case 'missing_tile':
-      case 'added_tile':
-        return { affectsClassifier: false, affectsDetector: Boolean(bbox) };
-      case 'false_positive':
-      case 'removed_tile':
-        return { affectsClassifier: false, affectsDetector: true };
-      default:
-        return { affectsClassifier: false, affectsDetector: false };
-    }
-  }
-
   private isMeaningfulCorrection(
     correctionType: VisionFeedbackCorrectionType,
     originalPrediction: VisionFeedbackTile | null,
@@ -360,17 +324,6 @@ class VisionFeedbackService {
         return [];
       }
 
-      const effects = this.deriveEffects(
-        correctionType as VisionFeedbackCorrectionType,
-        originalPrediction,
-        correctedTile,
-        bbox,
-      );
-
-      if (effects.affectsDetector && finalImageDetections.length === 0) {
-        return [];
-      }
-
       const sanitizedCorrection = {
         tileIndex,
         source: source as 'rack' | 'board',
@@ -380,8 +333,6 @@ class VisionFeedbackService {
         confidence: hasValidConfidence ? Math.round(confidence * 10000) / 10000 : null,
         bbox,
         finalImageDetections,
-        affectsClassifier: effects.affectsClassifier,
-        affectsDetector: effects.affectsDetector,
         classifierModelVersion,
         detectorModelVersion,
       };
@@ -406,8 +357,6 @@ class VisionFeedbackService {
       tileIndex: correction.tileIndex,
       source: correction.source,
       correctionType: correction.correctionType,
-      affectsClassifier: correction.affectsClassifier,
-      affectsDetector: correction.affectsDetector,
       correctedTile: correction.correctedTile,
       bbox: correction.bbox || null,
     };
@@ -498,30 +447,24 @@ class VisionFeedbackService {
       const artifact = artifactLookup.get(correction.feedbackHash);
 
       return {
-      source: correction.source,
-      correctionType: correction.correctionType,
-      originalPrediction: correction.originalPrediction
-        ? {
-            ...correction.originalPrediction,
-            confidence: correction.confidence ?? 0,
-          }
-        : null,
-      correctedTile: correction.correctedTile,
-      bbox: correction.bbox || null,
-      affectsClassifier: correction.affectsClassifier,
-      affectsDetector: correction.affectsDetector,
-      imageCropPath: artifact?.imageCropPath || null,
-      fullImagePath: artifact?.fullImagePath || null,
-      yoloLabelPath: artifact?.yoloLabelPath || null,
-      classifierModelVersion: correction.classifierModelVersion,
-      detectorModelVersion: correction.detectorModelVersion,
-      feedbackHash: correction.feedbackHash,
-      hasCrop: Boolean(artifact?.imageCropPath),
-      hasDetectionLabel: Boolean(artifact?.yoloLabelPath),
-      reviewed: false,
-      usedForTraining: false,
-      createdAt: new Date(),
-    };
+        source: correction.source,
+        correctionType: correction.correctionType,
+        originalPrediction: correction.originalPrediction
+          ? {
+              ...correction.originalPrediction,
+              confidence: correction.confidence ?? 0,
+            }
+          : null,
+        correctedTile: correction.correctedTile,
+        bbox: correction.bbox || null,
+        savedImagePath: artifact?.savedImagePath || null,
+        classifierModelVersion: correction.classifierModelVersion,
+        detectorModelVersion: correction.detectorModelVersion,
+        feedbackHash: correction.feedbackHash,
+        reviewed: false,
+        usedForTraining: false,
+        createdAt: new Date(),
+      };
     });
 
     const writeResult = await collection.bulkWrite(

@@ -70,16 +70,10 @@ export interface VisionFeedbackRecord {
   originalPrediction: VisionFeedbackPrediction | null;
   correctedTile: VisionFeedbackTile;
   bbox: VisionFeedbackBBox | null;
-  affectsClassifier: boolean;
-  affectsDetector: boolean;
-  imageCropPath: string | null;
-  fullImagePath: string | null;
-  yoloLabelPath: string | null;
+  savedImagePath: string | null;
   classifierModelVersion: string;
   detectorModelVersion: string;
   feedbackHash: string;
-  hasCrop: boolean;
-  hasDetectionLabel: boolean;
   reviewed: boolean;
   usedForTraining: boolean;
   createdAt: Date;

@@ -38,8 +38,6 @@ export interface VisionFeedbackArtifactRequestCorrection {
     | 'added_tile'
     | 'removed_tile'
     | 'both';
-  affectsClassifier: boolean;
-  affectsDetector: boolean;
   correctedTile: {
     value: number | null;
     color: string | null;
@@ -86,11 +84,8 @@ export interface VisionFeedbackArtifactRequestDetections {
 
 export interface FeedbackArtifactResult {
   feedbackHash: string;
-  tileIndex: number;
   source: 'rack' | 'board';
-  imageCropPath: string | null;
-  fullImagePath: string | null;
-  yoloLabelPath: string | null;
+  savedImagePath: string | null;
 }
 
 /**
