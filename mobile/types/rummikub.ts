@@ -41,10 +41,10 @@ export interface VisionFeedbackCorrection {
   tileIndex: number;
   source: 'rack' | 'board';
   correctionType: VisionFeedbackCorrectionType;
-  originalPrediction: VisionPrediction;
+  originalPrediction?: VisionPrediction;
   correctedTile: Tile;
-  confidence: number;
-  bbox: VisionBBox;
+  confidence?: number;
+  bbox?: VisionBBox;
   finalImageDetections?: Array<{
     tileIndex: number;
     bbox: VisionBBox;
@@ -99,6 +99,15 @@ export interface VisionFeedbackPayload {
     rack?: string;
     board?: string;
   };
+}
+
+export interface PreparedUploadImage {
+  uri: string;
+  mimeType: 'image/jpeg';
+  fileName: string;
+  width: number;
+  height: number;
+  fileSize: number | null;
 }
 
 export interface TileSet {

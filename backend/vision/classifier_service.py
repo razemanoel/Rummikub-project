@@ -1,4 +1,5 @@
 import json
+import threading
 from pathlib import Path
 from typing import Any
 
@@ -22,6 +23,7 @@ DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 _classifier_model = None
 _class_names = None
+_classifier_lock = threading.Lock()
 
 
 classifier_transform = transforms.Compose(
@@ -65,6 +67,10 @@ def get_classifier_model():
     return _classifier_model, _class_names
 
 
+def preload_classifier_model():
+    return get_classifier_model()
+
+
 def parse_class_name(class_name: str) -> dict[str, Any]:
     if class_name == "joker":
         return {
@@ -89,21 +95,32 @@ def parse_class_name(class_name: str) -> dict[str, Any]:
     }
 
 
-def classify_tile_crop(crop: Image.Image) -> dict[str, Any]:
+def classify_tile_crops(crops: list[Image.Image]) -> list[dict[str, Any]]:
+    if not crops:
+        return []
+
     model, class_names = get_classifier_model()
 
-    crop = crop.convert("RGB")
-    crop_tensor = classifier_transform(crop).unsqueeze(0).to(DEVICE)
+    crop_tensor = torch.stack(
+        [classifier_transform(crop.convert("RGB")) for crop in crops]
+    ).to(DEVICE)
 
-    with torch.no_grad():
-        outputs = model(crop_tensor)
+    with _classifier_lock:
+        with torch.no_grad():
+            outputs = model(crop_tensor)
         probabilities = torch.softmax(outputs, dim=1)
-        confidence, predicted_index = torch.max(probabilities, 1)
+        confidences, predicted_indices = torch.max(probabilities, 1)
 
-    class_name = class_names[predicted_index.item()]
-    parsed = parse_class_name(class_name)
+    results: list[dict[str, Any]] = []
 
-    return {
-        **parsed,
-        "classifier_confidence": round(float(confidence.item()), 4),
-    }
+    for confidence, predicted_index in zip(confidences, predicted_indices):
+        class_name = class_names[predicted_index.item()]
+        parsed = parse_class_name(class_name)
+        results.append(
+            {
+                **parsed,
+                "classifier_confidence": round(float(confidence.item()), 4),
+            }
+        )
+
+    return results

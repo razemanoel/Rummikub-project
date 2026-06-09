@@ -32,10 +32,10 @@ export interface VisionFeedbackCorrectionInput {
   tileIndex: number;
   source: VisionFeedbackSource;
   correctionType: VisionFeedbackCorrectionType;
-  originalPrediction: VisionFeedbackTile;
+  originalPrediction?: VisionFeedbackTile;
   correctedTile: VisionFeedbackTile;
-  confidence: number;
-  bbox: VisionFeedbackBBox;
+  confidence?: number;
+  bbox?: VisionFeedbackBBox;
   finalImageDetections?: Array<{
     tileIndex: number;
     bbox: VisionFeedbackBBox;
@@ -67,19 +67,13 @@ export interface VisionFeedbackRecord {
   _id?: ObjectId;
   source: VisionFeedbackSource;
   correctionType: VisionFeedbackCorrectionType;
-  originalPrediction: VisionFeedbackPrediction;
+  originalPrediction: VisionFeedbackPrediction | null;
   correctedTile: VisionFeedbackTile;
-  bbox: VisionFeedbackBBox;
-  affectsClassifier: boolean;
-  affectsDetector: boolean;
-  imageCropPath: string | null;
-  fullImagePath: string | null;
-  yoloLabelPath: string | null;
+  bbox: VisionFeedbackBBox | null;
+  savedImagePath: string | null;
   classifierModelVersion: string;
   detectorModelVersion: string;
   feedbackHash: string;
-  hasCrop: boolean;
-  hasDetectionLabel: boolean;
   reviewed: boolean;
   usedForTraining: boolean;
   createdAt: Date;

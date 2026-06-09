@@ -11,6 +11,7 @@ import {
 } from '@/types/auth';
 import {
   GameState,
+  PreparedUploadImage,
   SolveILPResponse,
   VisionAnalyzeResponse,
   VisionFeedbackPayload,
@@ -18,6 +19,7 @@ import {
 
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000/api';
 const TOKEN_KEY = 'rummikub_auth_token';
+const VISION_REQUEST_TIMEOUT_MS = 120000;
 
 // Platform detection - check if localStorage is available
 const isWeb = typeof localStorage !== 'undefined';
@@ -149,33 +151,27 @@ class ApiService {
 
 // Vision APIs
 async analyzeBoards(
-  myBoardUri?: string,
-  sharedBoardUri?: string
+  myBoardImage?: PreparedUploadImage,
+  sharedBoardImage?: PreparedUploadImage
 ): Promise<ApiResponse<VisionAnalyzeResponse>> {
   try {
     const formData = new FormData();
 
-    const getMimeType = (uri: string) => {
-      if (uri.endsWith('.png')) return 'image/png';
-      if (uri.endsWith('.jpg') || uri.endsWith('.jpeg')) return 'image/jpeg';
-      return 'image/jpeg';
-    };
-
     // Add myBoard image if provided
-    if (myBoardUri) {
+    if (myBoardImage) {
       formData.append('myBoard', {
-        uri: myBoardUri,
-        type: getMimeType(myBoardUri),
-        name: 'myBoard.jpg',
+        uri: myBoardImage.uri,
+        type: myBoardImage.mimeType,
+        name: myBoardImage.fileName,
       } as any);
     }
 
     // Add sharedBoard image if provided
-    if (sharedBoardUri) {
+    if (sharedBoardImage) {
       formData.append('sharedBoard', {
-        uri: sharedBoardUri,
-        type: getMimeType(sharedBoardUri),
-        name: 'sharedBoard.jpg',
+        uri: sharedBoardImage.uri,
+        type: sharedBoardImage.mimeType,
+        name: sharedBoardImage.fileName,
       } as any);
     }
 
@@ -183,6 +179,7 @@ async analyzeBoards(
       headers: {
         'Content-Type': 'multipart/form-data',
       },
+      timeout: VISION_REQUEST_TIMEOUT_MS,
     });
 
     return response.data;
@@ -226,6 +223,7 @@ async submitVisionFeedback(
       headers: {
         'Content-Type': 'multipart/form-data',
       },
+      timeout: VISION_REQUEST_TIMEOUT_MS,
     });
 
     return response.data;

@@ -1,5 +1,6 @@
 import axios, { AxiosInstance } from 'axios';
 import FormData from 'form-data';
+import { normalizeUploadedImage } from './imageNormalizationService';
 
 type MulterFile = Express.Multer.File;
 
@@ -37,19 +38,17 @@ export interface VisionFeedbackArtifactRequestCorrection {
     | 'added_tile'
     | 'removed_tile'
     | 'both';
-  affectsClassifier: boolean;
-  affectsDetector: boolean;
   correctedTile: {
     value: number | null;
     color: string | null;
     is_joker: boolean;
   };
-  bbox: {
+  bbox?: {
     x: number;
     y: number;
     width: number;
     height: number;
-  };
+  } | null;
 }
 
 export interface VisionFeedbackArtifactRequestDetections {
@@ -85,11 +84,8 @@ export interface VisionFeedbackArtifactRequestDetections {
 
 export interface FeedbackArtifactResult {
   feedbackHash: string;
-  tileIndex: number;
   source: 'rack' | 'board';
-  imageCropPath: string | null;
-  fullImagePath: string | null;
-  yoloLabelPath: string | null;
+  savedImagePath: string | null;
 }
 
 /**
@@ -114,6 +110,22 @@ class VisionService {
     });
   }
 
+  private formatVisionAnalyzeError(error: any): string {
+    if (error.response?.data?.message) {
+      return error.response.data.message;
+    }
+
+    if (error.code === 'ECONNREFUSED') {
+      return 'Vision service is unavailable';
+    }
+
+    if (error.code === 'ECONNABORTED') {
+      return 'Vision service timed out';
+    }
+
+    return error.message || 'Failed to analyze boards';
+  }
+
   async generateFeedbackArtifacts(
     corrections: VisionFeedbackArtifactRequestCorrection[],
     finalImageDetections: VisionFeedbackArtifactRequestDetections,
@@ -125,19 +137,28 @@ class VisionService {
     }
 
     const formData = new FormData();
-  formData.append('feedback', JSON.stringify({ corrections, finalImageDetections }));
+    formData.append('feedback', JSON.stringify({ corrections, finalImageDetections }));
 
-    if (rackImageFile) {
-      formData.append('rackImage', rackImageFile.buffer, {
-        filename: rackImageFile.originalname || 'rack-feedback.jpg',
-        contentType: rackImageFile.mimetype,
+    const normalizedRackImageFile = await normalizeUploadedImage(
+      rackImageFile,
+      'rack-feedback'
+    );
+    const normalizedBoardImageFile = await normalizeUploadedImage(
+      boardImageFile,
+      'board-feedback'
+    );
+
+    if (normalizedRackImageFile) {
+      formData.append('rackImage', normalizedRackImageFile.buffer, {
+        filename: normalizedRackImageFile.originalname || 'rack-feedback.jpg',
+        contentType: normalizedRackImageFile.mimetype,
       });
     }
 
-    if (boardImageFile) {
-      formData.append('boardImage', boardImageFile.buffer, {
-        filename: boardImageFile.originalname || 'board-feedback.jpg',
-        contentType: boardImageFile.mimetype,
+    if (normalizedBoardImageFile) {
+      formData.append('boardImage', normalizedBoardImageFile.buffer, {
+        filename: normalizedBoardImageFile.originalname || 'board-feedback.jpg',
+        contentType: normalizedBoardImageFile.mimetype,
       });
     }
 
@@ -223,24 +244,24 @@ async analyzeBoards(
       };
     }
 
-    const isHealthy = await this.healthCheck();
-    if (!isHealthy) {
-      throw new Error('Vision server is not responding');
-    }
+    const [normalizedMyBoardFile, normalizedSharedBoardFile] = await Promise.all([
+      normalizeUploadedImage(myBoardFile, 'myBoard'),
+      normalizeUploadedImage(sharedBoardFile, 'sharedBoard'),
+    ]);
 
     const formData = new FormData();
 
-    if (myBoardFile) {
-      formData.append('myBoard', myBoardFile.buffer, {
-        filename: myBoardFile.originalname || 'myBoard.jpg',
-        contentType: myBoardFile.mimetype,
+    if (normalizedMyBoardFile) {
+      formData.append('myBoard', normalizedMyBoardFile.buffer, {
+        filename: normalizedMyBoardFile.originalname || 'myBoard.jpg',
+        contentType: normalizedMyBoardFile.mimetype,
       });
     }
 
-    if (sharedBoardFile) {
-      formData.append('sharedBoard', sharedBoardFile.buffer, {
-        filename: sharedBoardFile.originalname || 'sharedBoard.jpg',
-        contentType: sharedBoardFile.mimetype,
+    if (normalizedSharedBoardFile) {
+      formData.append('sharedBoard', normalizedSharedBoardFile.buffer, {
+        filename: normalizedSharedBoardFile.originalname || 'sharedBoard.jpg',
+        contentType: normalizedSharedBoardFile.mimetype,
       });
     }
 
@@ -258,10 +279,7 @@ async analyzeBoards(
 
     return {
       success: false,
-      message:
-        error.response?.data?.message ||
-        error.message ||
-        'Failed to analyze boards',
+      message: this.formatVisionAnalyzeError(error),
       data: null,
     };
    }

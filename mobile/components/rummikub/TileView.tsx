@@ -1,12 +1,12 @@
 import React from 'react';
-import { View, Text, StyleSheet, Pressable } from 'react-native';
+import { View, Text, StyleSheet, Pressable, Image } from 'react-native';
 import { Tile } from '@/types/rummikub';
-import { Image } from 'react-native';
 
 interface Props {
   tile: Tile;
   onPress?: () => void;
   isInvalid?: boolean;
+  isSelected?: boolean;
 }
 
 const colorMap: Record<string, string> = {
@@ -16,7 +16,12 @@ const colorMap: Record<string, string> = {
   black: '#111827',
 };
 
-export default function TileView({ tile, onPress, isInvalid = false }: Props) {
+export default function TileView({
+  tile,
+  onPress,
+  isInvalid = false,
+  isSelected = false,
+}: Props) {
   const tileColor = tile.is_joker
     ? '#8b5cf6'
     : tile.color
@@ -25,7 +30,7 @@ export default function TileView({ tile, onPress, isInvalid = false }: Props) {
 
   return (
     <Pressable onPress={onPress} style={({ pressed }) => [styles.wrapper, pressed && styles.pressed]}>
-      <View style={[styles.tile, isInvalid && styles.invalidTile]}>
+      <View style={[styles.tile, isInvalid && styles.invalidTile, isSelected && styles.selectedTile]}>
         <Text style={[styles.value, { color: tileColor }]}>
           {tile.is_joker ? (
         <Image
@@ -101,6 +106,15 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     shadowColor: '#ef4444',
     shadowOpacity: 0.8,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 8,
+  },
+  selectedTile: {
+    borderColor: '#2563eb',
+    borderWidth: 2,
+    shadowColor: '#2563eb',
+    shadowOpacity: 0.6,
     shadowRadius: 6,
     shadowOffset: { width: 0, height: 2 },
     elevation: 8,

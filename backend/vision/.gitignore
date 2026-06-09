@@ -3,9 +3,16 @@ classification_dataset/
 classification_dataset_split/
 feedback_dataset/
 exported_feedback_dataset/
+test_images/
 
 detection_dataset/images/
 detection_dataset/labels/
+
+evaluate_detector_edge_cases.py
+debug_vision_pipeline.py
+debug_output/
+
+models/detector_best_old.pt
 
 # trained / pretrained weights
 yolo*.pt

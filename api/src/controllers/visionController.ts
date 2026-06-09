@@ -1,5 +1,6 @@
 import { Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
+import { ImageNormalizationError } from '../services/imageNormalizationService';
 import { visionService } from '../services/visionService';
 import { visionFeedbackService } from '../services/visionFeedbackService';
 
@@ -29,8 +30,6 @@ export class VisionController {
         });
       }
 
-      console.log('Authenticated vision analysis request received');
-
       // Get uploaded files from multer middleware
       const files = req.files as { [key: string]: any[] } | undefined;
 
@@ -43,14 +42,6 @@ export class VisionController {
           success: false,
           message: 'At least one board image is required',
         });
-      }
-
-      // Log file info for debugging
-      if (myBoardFile) {
-        console.log(`Processing myBoard: ${myBoardFile.originalname} (${myBoardFile.size} bytes)`);
-      }
-      if (sharedBoardFile) {
-        console.log(`Processing sharedBoard: ${sharedBoardFile.originalname} (${sharedBoardFile.size} bytes)`);
       }
 
       // Forward to vision service
@@ -114,7 +105,9 @@ export class VisionController {
     } catch (error: any) {
       const message = error.message || 'Failed to save vision feedback';
       const statusCode =
-        message.includes('Feedback payload') || message.includes('corrections')
+        error instanceof ImageNormalizationError
+        || message.includes('Feedback payload')
+        || message.includes('corrections')
           ? 400
           : 500;
 

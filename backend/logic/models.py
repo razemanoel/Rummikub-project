@@ -112,10 +112,8 @@ class FeedbackArtifactCorrection(BaseModel):
     tileIndex: int = Field(ge=0)
     source: Literal["rack", "board"]
     correctionType: VisionFeedbackCorrectionType
-    affectsClassifier: bool
-    affectsDetector: bool
     correctedTile: Tile
-    bbox: FeedbackBBox
+    bbox: Optional[FeedbackBBox] = None
 
 
 class FeedbackSourceDetections(BaseModel):
@@ -130,11 +128,8 @@ class FeedbackArtifactRequest(BaseModel):
 
 class FeedbackArtifactResult(BaseModel):
     feedbackHash: str
-    tileIndex: int
     source: Literal["rack", "board"]
-    imageCropPath: Optional[str] = None
-    fullImagePath: Optional[str] = None
-    yoloLabelPath: Optional[str] = None
+    savedImagePath: Optional[str] = None
 
 
 class FeedbackArtifactResponse(BaseModel):

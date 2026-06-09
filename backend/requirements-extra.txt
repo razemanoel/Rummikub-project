@@ -1,0 +1,5 @@
+-r requirements.txt
+
+# Optional tools that are not required to run the FastAPI vision service.
+pymongo>=4.6.0
+pytest>=8.0.0

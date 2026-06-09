@@ -29,6 +29,32 @@ def bbox_width(detection: dict[str, Any]) -> float:
     return bbox["x2"] - bbox["x1"]
 
 
+def bbox_height(detection: dict[str, Any]) -> float:
+    bbox = detection["bbox"]
+    return bbox["y2"] - bbox["y1"]
+
+
+def bbox_gap_distance(
+    left: dict[str, Any],
+    right: dict[str, Any],
+) -> float:
+    left_bbox = left["bbox"]
+    right_bbox = right["bbox"]
+
+    horizontal_gap = max(
+        right_bbox["x1"] - left_bbox["x2"],
+        left_bbox["x1"] - right_bbox["x2"],
+        0.0,
+    )
+    vertical_gap = max(
+        right_bbox["y1"] - left_bbox["y2"],
+        left_bbox["y1"] - right_bbox["y2"],
+        0.0,
+    )
+
+    return (horizontal_gap ** 2 + vertical_gap ** 2) ** 0.5
+
+
 def group_detections_into_rows(
     detections: list[dict[str, Any]],
     row_tolerance_ratio: float = 0.6,
@@ -71,6 +97,54 @@ def group_detections_into_rows(
 
     return rows
 
+
+def cluster_board_detections(
+    detections: list[dict[str, Any]],
+    max_gap_ratio: float = 0.28,
+) -> list[list[dict[str, Any]]]:
+    if not detections:
+        return []
+
+    average_dimension = sum(
+        max(bbox_width(detection), bbox_height(detection))
+        for detection in detections
+    ) / len(detections)
+    max_gap = average_dimension * max_gap_ratio
+
+    clusters: list[list[dict[str, Any]]] = []
+    remaining = list(detections)
+
+    while remaining:
+        seed = remaining.pop(0)
+        cluster = [seed]
+        pending = [seed]
+
+        while pending:
+            current = pending.pop()
+            adjacent = [
+                candidate
+                for candidate in remaining
+                if bbox_gap_distance(current, candidate) <= max_gap
+            ]
+
+            if not adjacent:
+                continue
+
+            pending.extend(adjacent)
+            cluster.extend(adjacent)
+            remaining = [
+                candidate
+                for candidate in remaining
+                if candidate not in adjacent
+            ]
+
+        cluster.sort(key=lambda detection: (bbox_center_x(detection), bbox_center_y(detection)))
+        clusters.append(cluster)
+
+    clusters.sort(key=lambda cluster: (bbox_center_y(cluster[0]), bbox_center_x(cluster[0])))
+
+    return clusters
+
 def sort_rack_detections(
     detections: list[dict[str, Any]],
 ) -> list[dict[str, Any]]:
@@ -86,38 +160,6 @@ def sort_rack_detections(
 
     return sorted_detections
 
-def split_row_into_sets(
-    row: list[dict[str, Any]],
-    gap_ratio: float = 1.3,
-) -> list[list[dict[str, Any]]]:
-    if not row:
-        return []
-
-    if len(row) == 1:
-        return [row]
-
-    average_width = sum(bbox_width(item) for item in row) / len(row)
-    max_same_set_gap = average_width * gap_ratio
-
-    sets: list[list[dict[str, Any]]] = []
-    current_set = [row[0]]
-
-    for previous, current in zip(row, row[1:]):
-        previous_right = previous["bbox"]["x2"]
-        current_left = current["bbox"]["x1"]
-        gap = current_left - previous_right
-
-        if gap > max_same_set_gap:
-            sets.append(current_set)
-            current_set = [current]
-        else:
-            current_set.append(current)
-
-    sets.append(current_set)
-
-    return sets
-
-
 def build_rack_from_detections(detections: list[dict[str, Any]]) -> list[Tile]:
     sorted_detections = sort_rack_detections(detections)
 
@@ -130,20 +172,16 @@ def build_rack_from_detections(detections: list[dict[str, Any]]) -> list[Tile]:
 def build_board_from_detections(
     detections: list[dict[str, Any]],
 ) -> list[TileSet]:
-    rows = group_detections_into_rows(detections)
     board_sets: list[TileSet] = []
 
-    for row in rows:
-        row_sets = split_row_into_sets(row)
+    for detected_set in cluster_board_detections(detections):
+        tiles = [
+            dict_to_tile(detection["tile"])
+            for detection in detected_set
+        ]
 
-        for detected_set in row_sets:
-            tiles = [
-                dict_to_tile(detection["tile"])
-                for detection in detected_set
-            ]
-
-            if tiles:
-                board_sets.append(TileSet(tiles=tiles))
+        if tiles:
+            board_sets.append(TileSet(tiles=tiles))
 
     return board_sets
 
