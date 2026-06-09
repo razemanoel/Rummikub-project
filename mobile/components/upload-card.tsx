@@ -61,35 +61,35 @@ export default function UploadCard({ title, images = [], onPress, onRemoveImage 
         </ScrollView>
       )}
 
-      {/* Upload button */}
-      <Pressable
-        onPress={onPress}
-        onPressIn={handlePressIn}
-        onPressOut={handlePressOut}
-        style={({ pressed }) => [
-          styles.card,
-          pressed && styles.cardPressed,
-        ]}
-      >
-        <Animated.View
-          style={[
-            styles.cardContent,
-            {
-              transform: [{ scale: scaleAnim }],
-            },
+      {/* Upload button — only shown when no photo uploaded yet */}
+      {images.length === 0 && (
+        <Pressable
+          onPress={onPress}
+          onPressIn={handlePressIn}
+          onPressOut={handlePressOut}
+          style={({ pressed }) => [
+            styles.card,
+            pressed && styles.cardPressed,
           ]}
         >
-          <Ionicons
-            name="add-circle-outline"
-            size={48}
-            color="#4f8dfd"
-            style={styles.icon}
-          />
-          <Text style={styles.uploadText}>
-            {images.length > 0 ? 'Add More Photo' : 'Snap and Upload Photo'}
-          </Text>
-        </Animated.View>
-      </Pressable>
+          <Animated.View
+            style={[
+              styles.cardContent,
+              {
+                transform: [{ scale: scaleAnim }],
+              },
+            ]}
+          >
+            <Ionicons
+              name="add-circle-outline"
+              size={48}
+              color="#4f8dfd"
+              style={styles.icon}
+            />
+            <Text style={styles.uploadText}>Snap and Upload Photo</Text>
+          </Animated.View>
+        </Pressable>
+      )}
     </View>
   );
 }
