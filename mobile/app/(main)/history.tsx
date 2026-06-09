@@ -39,7 +39,7 @@ export default function HistoryScreen() {
     }
   };
 
-  const renderHistoryItem = ({ item }: any) => (
+  const renderHistoryItem = ({ item, index }: any) => (
     <Pressable
       onPress={() =>
         router.push({
@@ -55,29 +55,22 @@ export default function HistoryScreen() {
         pressed && styles.historyItemPressed,
       ]}
     >
-      <View style={styles.itemLeft}>
-        <View style={styles.itemIcon}>
-          <Ionicons
-            name={item.boardType === 'My Board' ? 'square' : 'share-social'}
-            size={20}
-            color="#4f8dfd"
-          />
-        </View>
-        <View style={styles.itemContent}>
-          <Text style={styles.itemDate}>
-            {new Date(item.createdAt).toLocaleDateString()}
-          </Text>
-          <Text style={styles.itemMoves}>
-            {item.solution?.tiles_used_count || 0} tiles used
-          </Text>
-        </View>
+      <View style={styles.itemNumber}>
+        <Text style={styles.itemNumberText}>{historyItems.length - index}</Text>
       </View>
-      <View style={styles.itemRight}>
-        <Text style={styles.itemTime}>
-          {new Date(item.createdAt).toLocaleTimeString()}
+      <View style={styles.itemIcon}>
+        <Ionicons
+          name={item.boardType === 'My Board' ? 'square' : 'share-social'}
+          size={20}
+          color="#4f8dfd"
+        />
+      </View>
+      <View style={styles.itemContent}>
+        <Text style={styles.itemDate}>
+          {new Date(item.createdAt).toLocaleDateString()} · {new Date(item.createdAt).toLocaleTimeString()}
         </Text>
-        <Text style={styles.itemType}>
-          {item.solution?.candidate_count || 0} sets
+        <Text style={styles.itemMoves}>
+          {item.solution?.tiles_used_count || 0} tiles used
         </Text>
       </View>
     </Pressable>
@@ -107,7 +100,6 @@ export default function HistoryScreen() {
             data={historyItems}
             renderItem={renderHistoryItem}
             keyExtractor={(item, index) => item._id?.toString() || index.toString()}
-            scrollEnabled={false}
             contentContainerStyle={styles.listContent}
           />
         ) : loading ? (
@@ -123,14 +115,6 @@ export default function HistoryScreen() {
             </Text>
           </View>
         )}
-
-        {/* Info Section */}
-        <View style={styles.infoSection}>
-          <Ionicons name="information-circle" size={20} color="#4f8dfd" />
-          <Text style={styles.infoText}>
-            Your analysis history is stored locally on your device
-          </Text>
-        </View>
       </SafeAreaView>
     </LinearGradient>
   );
@@ -165,7 +149,6 @@ const styles = StyleSheet.create({
   },
   historyItem: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
     backgroundColor: 'rgba(79, 141, 253, 0.08)',
     borderRadius: 12,
@@ -177,10 +160,19 @@ const styles = StyleSheet.create({
   historyItemPressed: {
     backgroundColor: 'rgba(79, 141, 253, 0.15)',
   },
-  itemLeft: {
-    flexDirection: 'row',
+  itemNumber: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: 'rgba(79, 141, 253, 0.25)',
+    justifyContent: 'center',
     alignItems: 'center',
-    flex: 1,
+    marginRight: 12,
+  },
+  itemNumberText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#9db4ff',
   },
   itemIcon: {
     width: 40,
@@ -205,24 +197,6 @@ const styles = StyleSheet.create({
     color: '#9db4ff',
     fontWeight: '500',
   },
-  itemRight: {
-    alignItems: 'flex-end',
-    marginLeft: 12,
-  },
-  itemTime: {
-    fontSize: 12,
-    color: '#d1d5db',
-    marginBottom: 4,
-    fontWeight: '500',
-  },
-  itemType: {
-    fontSize: 11,
-    color: '#9ca3af',
-    backgroundColor: 'rgba(79, 141, 253, 0.15)',
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 4,
-  },
   emptyContainer: {
     flex: 1,
     justifyContent: 'center',
@@ -240,22 +214,5 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#9ca3af',
     textAlign: 'center',
-  },
-  infoSection: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(79, 141, 253, 0.08)',
-    borderRadius: 12,
-    padding: 12,
-    marginBottom: 20,
-    borderLeftWidth: 3,
-    borderLeftColor: '#4f8dfd',
-  },
-  infoText: {
-    fontSize: 13,
-    color: '#cbd5e1',
-    marginLeft: 12,
-    fontWeight: '500',
-    flex: 1,
   },
 });

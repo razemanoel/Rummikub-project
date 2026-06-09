@@ -83,27 +83,48 @@ export const sortTilesInSet = (tiles: ReviewTileState[]) => {
   const jokers = tiles.filter((tile) => tile.tile.is_joker);
   const normalTiles = tiles.filter((tile) => !tile.tile.is_joker);
 
-  const sameColor =
+  if (jokers.length === 0) {
+    const sameColor =
+      normalTiles.length > 0
+      && normalTiles.every((tile) => tile.tile.color === normalTiles[0].tile.color);
+
+    if (sameColor) {
+      return [...normalTiles].sort((a, b) => (a.tile.value || 0) - (b.tile.value || 0));
+    }
+
+    return [...normalTiles].sort((a, b) => {
+      if ((a.tile.value || 0) !== (b.tile.value || 0)) return (a.tile.value || 0) - (b.tile.value || 0);
+      return String(a.tile.color).localeCompare(String(b.tile.color));
+    });
+  }
+
+  const isRun =
     normalTiles.length > 0
     && normalTiles.every((tile) => tile.tile.color === normalTiles[0].tile.color);
 
-  if (sameColor) {
-    return [
-      ...normalTiles.sort((left, right) => (left.tile.value || 0) - (right.tile.value || 0)),
-      ...jokers,
-    ];
+  if (!isRun) {
+    return [...normalTiles, ...jokers];
   }
 
-  return [
-    ...normalTiles.sort((left, right) => {
-      if ((left.tile.value || 0) !== (right.tile.value || 0)) {
-        return (left.tile.value || 0) - (right.tile.value || 0);
-      }
+  // Run with jokers: insert jokers into the gaps they fill
+  const sorted = [...normalTiles].sort((a, b) => (a.tile.value || 0) - (b.tile.value || 0));
+  const result: ReviewTileState[] = [];
+  const jokerPool = [...jokers];
 
-      return String(left.tile.color).localeCompare(String(right.tile.color));
-    }),
-    ...jokers,
-  ];
+  for (let i = 0; i < sorted.length; i++) {
+    if (i > 0) {
+      const gap = (sorted[i].tile.value || 0) - (sorted[i - 1].tile.value || 0) - 1;
+      for (let g = 0; g < gap && jokerPool.length > 0; g++) {
+        result.push(jokerPool.shift()!);
+      }
+    }
+    result.push(sorted[i]);
+  }
+
+  // Remaining jokers extend the run at the end
+  result.push(...jokerPool);
+
+  return result;
 };
 
 export const buildReviewTileState = (

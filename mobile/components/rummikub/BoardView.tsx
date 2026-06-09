@@ -38,7 +38,7 @@ export default function BoardView({
             <View key={tileIndex} style={styles.tileWrapper}>
               <TileView
                 tile={tile}
-                isInvalid={invalidTileKeys.includes(getTileKey(tile))}
+                isInvalid={invalidSetIndexes.includes(setIndex) || invalidTileKeys.includes(getTileKey(tile))}
                 onPress={() => onTilePress?.(setIndex, tileIndex)}
               />
             </View>

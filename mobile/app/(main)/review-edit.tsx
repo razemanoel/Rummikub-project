@@ -25,7 +25,6 @@ import {
 import EditTileModal from '@/components/rummikub/EditTileModal';
 import BoardSetEditor from '@/components/review/BoardSetEditor';
 import ReviewTileList from '@/components/review/ReviewTileList';
-import VisionOverlayEditor from '@/components/review/VisionOverlayEditor';
 import {
   areTilesEqual,
   BoardStructureChange,
@@ -438,7 +437,7 @@ const isGameStateValid = validationErrors.length === 0;
     }
 
     setEditingLocation({ source: 'board', setId, tileId });
-    setIsTileModalVisible(false);
+    setIsTileModalVisible(true);
   };
 
   const handleSelectBoardOverlayTile = (tileId: string) => {
@@ -512,6 +511,7 @@ const isGameStateValid = validationErrors.length === 0;
         tiles: [],
       },
     ]);
+    Alert.alert('Set Created', 'An empty set was added. Add tiles to it before solving.');
   };
 
   const deleteBoardSet = (setId: string) => {
@@ -598,74 +598,44 @@ const isGameStateValid = validationErrors.length === 0;
     setIsTileModalVisible(false);
   };
 
-  const mergeSelectedBoardSetIntoSet = (targetSetId: string) => {
-    if (!editingLocation || editingLocation.source !== 'board' || editingLocation.setId === 'board-unassigned') {
-      return;
-    }
-
-    const sourceSetId = editingLocation.setId;
-
-    if (sourceSetId === targetSetId) {
-      return;
-    }
-
-    const sourceSet = reviewBoard.find((tileSet) => tileSet.id === sourceSetId);
-
-    if (!sourceSet || sourceSet.tiles.length === 0) {
-      return;
-    }
+  const handleMergeSets = (fromSetId: string, toSetId: string) => {
+    const sourceSet = reviewBoard.find((tileSet) => tileSet.id === fromSetId);
+    if (!sourceSet || sourceSet.tiles.length === 0) return;
 
     captureUndoSnapshot();
-
-    sourceSet.tiles.forEach((tile) => recordBoardStructureChange(tile, sourceSetId, targetSetId));
+    sourceSet.tiles.forEach((tile) => recordBoardStructureChange(tile, fromSetId, toSetId));
 
     setReviewBoard((prev) => {
-      const currentSourceSet = prev.find((tileSet) => tileSet.id === sourceSetId);
-
-      if (!currentSourceSet) {
-        return prev;
-      }
-
+      const currentSourceSet = prev.find((tileSet) => tileSet.id === fromSetId);
+      if (!currentSourceSet) return prev;
       return prev
-        .filter((tileSet) => tileSet.id !== sourceSetId)
+        .filter((tileSet) => tileSet.id !== fromSetId)
         .map((tileSet) => (
-          tileSet.id === targetSetId
+          tileSet.id === toSetId
             ? { ...tileSet, tiles: sortTilesInSet([...tileSet.tiles, ...currentSourceSet.tiles]) }
             : tileSet
         ));
     });
+  };
 
-    setEditingLocation({ source: 'board', setId: targetSetId, tileId: sourceSet.tiles[0].id });
-    setIsTileModalVisible(false);
+  const handleMoveTile = (fromSetId: string, tileId: string, toSetId: string) => {
+    const tile = reviewBoard.find((s) => s.id === fromSetId)?.tiles.find((t) => t.id === tileId);
+    if (!tile) return;
+
+    captureUndoSnapshot();
+
+    setReviewBoard((prev) => prev.map((tileSet) => {
+      if (tileSet.id === fromSetId) return { ...tileSet, tiles: tileSet.tiles.filter((t) => t.id !== tileId) };
+      if (tileSet.id === toSetId) return { ...tileSet, tiles: sortTilesInSet([...tileSet.tiles, tile]) };
+      return tileSet;
+    }));
+
+    recordBoardStructureChange(tile, fromSetId, toSetId);
   };
 
   const handleDeleteBoardSet = (setId: string) => {
-    if (Platform.OS === 'web') {
-      const confirmed = typeof window !== 'undefined'
-        ? window.confirm(
-            'Detected tiles in this set will be submitted as removed detections. Manual tiles in this set will be discarded.'
-          )
-        : false;
-
-      if (confirmed) {
-        deleteBoardSet(setId);
-      }
-
-      return;
-    }
-
-    Alert.alert(
-      'Delete this set?',
-      'Detected tiles in this set will be submitted as removed detections. Manual tiles in this set will be discarded.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete set',
-          style: 'destructive',
-          onPress: () => deleteBoardSet(setId),
-        },
-      ],
-    );
+    deleteBoardSet(setId);
+    Alert.alert('Set Deleted', 'The set has been removed.');
   };
 
   const handleSaveTile = (updatedTile: Tile) => {
@@ -842,12 +812,14 @@ const isGameStateValid = validationErrors.length === 0;
   }, [boardValidationIndexMap, unassignedBoardTiles.length]);
 
   useEffect(() => {
+    if (isTileModalVisible) return;
+
     const timeoutId = setTimeout(() => {
       validateCurrentGameState(gameState);
     }, 400);
 
     return () => clearTimeout(timeoutId);
-  }, [gameState, validateCurrentGameState]);
+  }, [gameState, validateCurrentGameState, isTileModalVisible]);
 
   const handleConfirm = async () => {
   try {
@@ -905,37 +877,18 @@ const isGameStateValid = validationErrors.length === 0;
           <Pressable onPress={() => router.back()}>
             <Ionicons name="chevron-back" size={28} color="#9db4ff" />
           </Pressable>
-          <Text style={styles.headerTitle}>Review Tiles</Text>
-          <Pressable
-            style={[styles.undoButton, !undoSnapshot && styles.undoButtonDisabled]}
-            onPress={handleUndo}
-            disabled={!undoSnapshot}
-          >
-            <Ionicons name="arrow-undo" size={18} color="#e2e8f0" />
-            <Text style={styles.undoButtonText}>Undo</Text>
-          </Pressable>
+          <View style={styles.headerTitleContainer} pointerEvents="none">
+            <Text style={styles.headerTitle}>Review Tiles</Text>
+          </View>
         </View>
 
         <ScrollView contentContainerStyle={styles.content}>
           <Text style={styles.subtitle}>
-            Review the detected tiles directly on the uploaded images, manage board sets explicitly,
-            and keep the current review state as the single source of truth before solving.
+            Correct any misdetected tiles, then confirm to solve.
           </Text>
 
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Rack Review</Text>
-            <VisionOverlayEditor
-              title="Rack image"
-              subtitle="Tap a detected rack box to edit it. Manual rack tiles stay in the synced list below."
-              imageUri={rackImageUri}
-              tiles={reviewRack}
-              selectedTileId={selectedTileId}
-              selectedTile={editingLocation?.source === 'rack' ? editingReviewTile : null}
-              onTilePress={handleSelectRackOverlayTile}
-              onSelectedTileEdit={editingLocation?.source === 'rack' ? handleOpenSelectedTileEditor : undefined}
-              onSelectedTileDelete={editingLocation?.source === 'rack' ? handleDeleteTile : undefined}
-            />
-            <View style={styles.sectionSpacer} />
             <ReviewTileList
               title="Rack tiles"
               subtitle="Add rack tiles manually or tap any tile to correct it."
@@ -950,24 +903,10 @@ const isGameStateValid = validationErrors.length === 0;
 
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Board Review</Text>
-            <VisionOverlayEditor
-              title="Board image"
-              subtitle="Each box stays linked to the same detected board tile even if you edit or sort sets below."
-              imageUri={boardImageUri}
-              tiles={reviewBoard.flatMap((tileSet) => tileSet.tiles)}
-              selectedTileId={selectedTileId}
-              selectedTile={editingLocation?.source === 'board' ? editingReviewTile : null}
-              onTilePress={handleSelectBoardOverlayTile}
-              onSelectedTileEdit={editingLocation?.source === 'board' ? handleOpenSelectedTileEditor : undefined}
-              onSelectedTileDelete={editingLocation?.source === 'board' ? handleDeleteTile : undefined}
-            />
-            <View style={styles.sectionSpacer} />
             <BoardSetEditor
               board={reviewBoard}
               unassignedBoardTiles={unassignedBoardTiles}
               selectedTileId={selectedTileId}
-              selectedSetId={selectedBoardSetId}
-              selectedTileLabel={editingLocation?.source === 'board' && editingReviewTile ? getTileLabel(editingReviewTile.tile) : undefined}
               invalidSetIndexes={invalidSetIndexes}
               invalidTileKeys={invalidTileKeys}
               onTilePress={handleEditBoardTile}
@@ -975,21 +914,8 @@ const isGameStateValid = validationErrors.length === 0;
               onAddTileToSet={handleAddTileToBoardSet}
               onCreateSet={handleCreateBoardSet}
               onDeleteSet={handleDeleteBoardSet}
-              onEditSelectedTile={editingLocation?.source === 'board' ? handleOpenSelectedTileEditor : undefined}
-              onClearSelection={editingLocation?.source === 'board' ? handleClearSelection : undefined}
-              onMoveTileToSet={
-                editingLocation?.source === 'board' ? moveSelectedBoardTileToSet : undefined
-              }
-              onMoveTileToUnassigned={
-                editingLocation?.source === 'board' && editingLocation.setId !== 'board-unassigned'
-                  ? () => removeBoardTileFromSet(editingLocation.tileId)
-                  : undefined
-              }
-              onMergeSelectedSetIntoSet={
-                editingLocation?.source === 'board' && editingLocation.setId !== 'board-unassigned'
-                  ? mergeSelectedBoardSetIntoSet
-                  : undefined
-              }
+              onMergeSets={handleMergeSets}
+              onMoveTile={handleMoveTile}
             />
           </View>
           {validationErrors.length > 0 && (
@@ -1028,6 +954,7 @@ const isGameStateValid = validationErrors.length === 0;
         }
 
         setIsTileModalVisible(false);
+        setEditingLocation(null);
       }}
       onSave={handleSaveTile}
       onDelete={handleDeleteTile}
@@ -1050,8 +977,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: 12,
+    position: 'relative',
+  },
+  headerTitleContainer: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    alignItems: 'center',
   },
   headerTitle: {
+    textAlign: 'center',
     color: '#ffffff',
     fontSize: 22,
     fontWeight: '800',

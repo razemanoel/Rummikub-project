@@ -48,6 +48,8 @@ export default function ReviewReadOnlyScreen() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isValidating, setIsValidating] = useState(false);
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
+  const [invalidSetIndexes, setInvalidSetIndexes] = useState<number[]>([]);
+  const [invalidTileKeys, setInvalidTileKeys] = useState<string[]>([]);
 
   const initialGameState = useMemo<GameState>(
     () => (params.gameState ? JSON.parse(params.gameState as string) : EMPTY_GAME_STATE),
@@ -131,7 +133,24 @@ export default function ReviewReadOnlyScreen() {
             ))
           : ['Invalid game state'];
 
+        const invalidIndexes = invalidSets
+          .filter((item: any) => item.index >= 0)
+          .map((item: any) => item.index as number);
+
+        const duplicateKeys = invalidSets
+          .map((item: any) => item.reason as string)
+          .flatMap((reason: string) => {
+            if (reason.includes('Too many jokers')) return ['joker'];
+            if (reason.startsWith('Too many copies of tile')) {
+              const match = reason.match(/tile (\d+) (\w+)/);
+              return match ? [`${match[1]}-${match[2]}`] : [];
+            }
+            return [];
+          });
+
         setValidationErrors(errors);
+        setInvalidSetIndexes(invalidIndexes);
+        setInvalidTileKeys(duplicateKeys);
       } catch (error: any) {
         if (isActive) {
           setValidationErrors([error.message || 'Validation failed']);
@@ -218,17 +237,6 @@ export default function ReviewReadOnlyScreen() {
             </View>
           </View>
 
-          {validationErrors.length > 0 ? (
-            <View style={styles.validationBox}>
-              <Text style={styles.validationTitle}>Validation errors</Text>
-              {validationErrors.map((error, index) => (
-                <Text key={index} style={styles.validationText}>
-                  • {error}
-                </Text>
-              ))}
-            </View>
-          ) : null}
-
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Your Rack</Text>
 
@@ -239,7 +247,11 @@ export default function ReviewReadOnlyScreen() {
                 displayRackRows.map((row, rowIndex) => (
                   <View key={`rack-row-${rowIndex}`} style={styles.rackVisualRow}>
                     {row.map((tile, tileIndex) => (
-                      <TileView key={`rack-tile-${rowIndex}-${tileIndex}`} tile={tile} />
+                      <TileView
+                        key={`rack-tile-${rowIndex}-${tileIndex}`}
+                        tile={tile}
+                        isInvalid={invalidTileKeys.includes(tile.is_joker ? 'joker' : `${tile.value}-${tile.color}`)}
+                      />
                     ))}
                   </View>
                 ))
@@ -252,9 +264,24 @@ export default function ReviewReadOnlyScreen() {
             {initialGameState.board.length === 0 ? (
               <Text style={styles.emptyText}>No board sets returned.</Text>
             ) : (
-              <BoardView board={initialGameState.board} />
+              <BoardView
+                board={initialGameState.board}
+                invalidSetIndexes={invalidSetIndexes}
+                invalidTileKeys={invalidTileKeys}
+              />
             )}
           </View>
+
+          {validationErrors.length > 0 ? (
+            <View style={styles.validationBox}>
+              <Text style={styles.validationTitle}>Validation errors</Text>
+              {validationErrors.map((error, index) => (
+                <Text key={index} style={styles.validationText}>
+                  • {error}
+                </Text>
+              ))}
+            </View>
+          ) : null}
 
           <View style={styles.actionRow}>
             <Pressable style={styles.secondaryButton} onPress={handleOpenEditor}>

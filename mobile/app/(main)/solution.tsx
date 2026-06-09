@@ -26,7 +26,7 @@ export default function SolutionScreen() {
   const solution: SolveILPResponse = JSON.parse(
     params.solution as string
   );
-  const filteredSteps = solution.steps.filter(
+  const filteredSteps = (solution.steps || []).filter(
     (step) =>
       !step.startsWith('Joker usage') &&
       !step.startsWith('- Use a joker') &&
@@ -87,8 +87,8 @@ export default function SolutionScreen() {
             <Text style={styles.sectionTitle}>Remaining Rack</Text>
 
             <View style={styles.rackRow}>
-                {solution.remaining_rack.length > 0 ? (
-                solution.remaining_rack.map((tile, index) => (
+                {(solution.remaining_rack?.length ?? 0) > 0 ? (
+                (solution.remaining_rack ?? []).map((tile, index) => (
                     <TileView key={index} tile={tile} />
                 ))
                 ) : (
@@ -138,12 +138,12 @@ export default function SolutionScreen() {
             </View>
           </View>
 
-          {solution.joker_assignments.length > 0 && (
+          {(solution.joker_assignments?.length ?? 0) > 0 && (
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>Joker Usage</Text>
 
               <View style={styles.stepsCard}>
-                {solution.joker_assignments.map((joker, index) => (
+                {(solution.joker_assignments ?? []).map((joker, index) => (
                   <Text key={index} style={styles.stepText}>
                     Joker as {joker.value} {joker.color} in a {joker.type}
                   </Text>
