@@ -106,7 +106,7 @@ rummikub-project/
 ### Step 1 — Clone the repository
 
 ```bash
-git clone https://github.com/your-username/rummikub-project.git
+git clone https://github.com/razemanoel/rummikub-project.git
 cd rummikub-project
 ```
 
