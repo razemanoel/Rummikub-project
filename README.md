@@ -12,6 +12,7 @@ Take a picture of your rack and the shared board — the app detects every tile,
 - [Features](#features)
 - [Project Structure](#project-structure)
 - [Setup and Running](#setup-and-running)
+- [Application Flow](#application-flow)
 
 ---
 
@@ -181,6 +182,8 @@ All dependencies install automatically inside Docker — no manual `pip install`
 ```bash
 docker compose down
 ```
+
+<br><br>
 
 ---
 
