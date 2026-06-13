@@ -194,7 +194,7 @@ A step-by-step walkthrough of the user journey from login to solution.
 
 Create a new account or log in with an existing one to access the solver.
 
-<img src="https://raw.githubusercontent.com/razemanoel/Rummikub-project/assets/screenshots/01-login.jpg" width="220"> <img src="https://raw.githubusercontent.com/razemanoel/Rummikub-project/assets/screenshots/02-create-account.jpg" width="220">
+<img src="https://i.imgur.com/Q4ESpCN.jpeg" width="220"> <img src="https://i.imgur.com/LmqoL0D.jpeg" width="220">
 
 ---
 
@@ -202,7 +202,7 @@ Create a new account or log in with an existing one to access the solver.
 
 Snap a photo of your tile rack and the shared board, then tap **Analyze Photos** to send them for detection.
 
-<img src="https://raw.githubusercontent.com/razemanoel/Rummikub-project/assets/screenshots/03-home-empty.jpg" width="220"> <img src="https://raw.githubusercontent.com/razemanoel/Rummikub-project/assets/screenshots/04-home-photos.jpg" width="220">
+<img src="https://i.imgur.com/tKqSx4V.jpeg" width="220"> <img src="https://i.imgur.com/KIiJ558.jpeg" width="220">
 
 ---
 
@@ -210,7 +210,7 @@ Snap a photo of your tile rack and the shared board, then tap **Analyze Photos**
 
 Review a summary of all detected tiles and board sets before solving — tap **Edit** to correct errors or **Solve** to proceed.
 
-<img src="https://raw.githubusercontent.com/razemanoel/Rummikub-project/assets/screenshots/05-detection-review.jpg" width="220">
+<img src="https://i.imgur.com/MeDyN6F.jpeg" width="220">
 
 ---
 
@@ -218,7 +218,7 @@ Review a summary of all detected tiles and board sets before solving — tap **E
 
 Inspect every detected tile individually; tap any tile to correct it, add tiles the model missed, or reorganize board sets.
 
-<img src="https://raw.githubusercontent.com/razemanoel/Rummikub-project/assets/screenshots/06-review-tiles-rack.jpg" width="220"> <img src="https://raw.githubusercontent.com/razemanoel/Rummikub-project/assets/screenshots/07-review-tiles-board.jpg" width="220">
+<img src="https://i.imgur.com/7JunOJV.jpeg" width="220"> <img src="https://i.imgur.com/UZMBlns.jpeg" width="220">
 
 ---
 
@@ -226,7 +226,7 @@ Inspect every detected tile individually; tap any tile to correct it, add tiles 
 
 The ILP solver returns the best possible move — tiles to play, sets to rearrange, and full joker usage explained.
 
-<img src="https://raw.githubusercontent.com/razemanoel/Rummikub-project/assets/screenshots/08-solution-top.jpg" width="220"> <img src="https://raw.githubusercontent.com/razemanoel/Rummikub-project/assets/screenshots/09-solution-middle.jpg" width="220"> <img src="https://raw.githubusercontent.com/razemanoel/Rummikub-project/assets/screenshots/10-solution-bottom.jpg" width="220">
+<img src="https://i.imgur.com/eghm6io.jpeg" width="220"> <img src="https://i.imgur.com/mayghI1.jpeg" width="220"> <img src="https://i.imgur.com/V7XIBc4.jpeg" width="220">
 
 ---
 
@@ -234,7 +234,7 @@ The ILP solver returns the best possible move — tiles to play, sets to rearran
 
 Follow the move one action at a time, with the rack and board updated live at each step.
 
-<img src="https://raw.githubusercontent.com/razemanoel/Rummikub-project/assets/screenshots/11-simulation-step1.jpg" width="220"> <img src="https://raw.githubusercontent.com/razemanoel/Rummikub-project/assets/screenshots/12-simulation-step3.jpg" width="220"> <img src="https://raw.githubusercontent.com/razemanoel/Rummikub-project/assets/screenshots/13-simulation-step3-scroll.jpg" width="220"> <img src="https://raw.githubusercontent.com/razemanoel/Rummikub-project/assets/screenshots/14-simulation-final.jpg" width="220">
+<img src="https://i.imgur.com/86dqs2d.jpeg" width="220"> <img src="https://i.imgur.com/4X5uWLU.jpeg" width="220"> <img src="https://i.imgur.com/GtgPD3b.jpeg" width="220"> <img src="https://i.imgur.com/Ddtlxq8.jpeg" width="220">
 
 ---
 
@@ -242,4 +242,4 @@ Follow the move one action at a time, with the rack and board updated live at ea
 
 Browse all previously solved games with timestamps and tile counts, and revisit any past solution.
 
-<img src="https://raw.githubusercontent.com/razemanoel/Rummikub-project/assets/screenshots/15-history.jpg" width="220">
+<img src="https://i.imgur.com/ssaR8J1.jpeg" width="220">
