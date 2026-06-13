@@ -181,3 +181,65 @@ All dependencies install automatically inside Docker — no manual `pip install`
 ```bash
 docker compose down
 ```
+
+---
+
+## Application Flow
+
+A step-by-step walkthrough of the user journey from login to solution.
+
+---
+
+### Step 1 — Authentication
+
+Create a new account or log in with an existing one to access the solver.
+
+<img src="screenshots/01-login.jpg" width="220"> <img src="screenshots/02-create-account.jpg" width="220">
+
+---
+
+### Step 2 — Upload Photos
+
+Snap a photo of your tile rack and the shared board, then tap **Analyze Photos** to send them for detection.
+
+<img src="screenshots/03-home-empty.jpg" width="220"> <img src="screenshots/04-home-photos.jpg" width="220">
+
+---
+
+### Step 3 — Detection Review
+
+Review a summary of all detected tiles and board sets before solving — tap **Edit** to correct errors or **Solve** to proceed.
+
+<img src="screenshots/05-detection-review.jpg" width="220">
+
+---
+
+### Step 4 — Review and Edit Tiles
+
+Inspect every detected tile individually; tap any tile to correct it, add tiles the model missed, or reorganize board sets.
+
+<img src="screenshots/06-review-tiles-rack.jpg" width="220"> <img src="screenshots/07-review-tiles-board.jpg" width="220">
+
+---
+
+### Step 5 — Optimal Solution
+
+The ILP solver returns the best possible move — tiles to play, sets to rearrange, and full joker usage explained.
+
+<img src="screenshots/08-solution-top.jpg" width="220"> <img src="screenshots/09-solution-middle.jpg" width="220"> <img src="screenshots/10-solution-bottom.jpg" width="220">
+
+---
+
+### Step 6 — Step-by-Step Simulation
+
+Follow the move one action at a time, with the rack and board updated live at each step.
+
+<img src="screenshots/11-simulation-step1.jpg" width="220"> <img src="screenshots/12-simulation-step3.jpg" width="220"> <img src="screenshots/13-simulation-step3-scroll.jpg" width="220"> <img src="screenshots/14-simulation-final.jpg" width="220">
+
+---
+
+### Step 7 — History
+
+Browse all previously solved games with timestamps and tile counts, and revisit any past solution.
+
+<img src="screenshots/15-history.jpg" width="220">
