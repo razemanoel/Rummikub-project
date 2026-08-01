@@ -83,6 +83,3 @@ backend/Dockerfile.gpu.local
 
 yolo26n.pt
 
-# Submission/reference docs kept locally only
-ProjectArchitecture_B7_Final.md
-ProjectArchitecture_B7_Final.pdf
