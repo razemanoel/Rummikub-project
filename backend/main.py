@@ -1,7 +1,11 @@
 import asyncio
 import os
+import shutil
 import tempfile
+from datetime import datetime, timezone
+from pathlib import Path
 from typing import Optional
+from uuid import uuid4
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 
@@ -42,6 +46,22 @@ async def preload_vision_models() -> None:
     await asyncio.to_thread(preload_detector_model)
 
     await asyncio.to_thread(preload_classifier_model)
+
+
+_DEBUG_SAVE_DIR = (
+    Path(__file__).resolve().parent / "vision" / "feedback_dataset" / "debug_images"
+    if os.getenv("VISION_DEBUG_SAVE_IMAGES")
+    else None
+)
+
+
+def _debug_save_board_image(src_path: str) -> None:
+    if _DEBUG_SAVE_DIR is None:
+        return
+    _DEBUG_SAVE_DIR.mkdir(parents=True, exist_ok=True)
+    ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S")
+    dest = _DEBUG_SAVE_DIR / f"{ts}_{uuid4().hex[:8]}.jpg"
+    shutil.copy2(src_path, dest)
 
 
 def save_upload_to_temp_file(upload: UploadFile) -> str:
@@ -148,6 +168,7 @@ async def analyze_endpoint(
         if sharedBoard is not None:
             shared_board_path = save_upload_to_temp_file(sharedBoard)
             temp_files.append(shared_board_path)
+            _debug_save_board_image(shared_board_path)
             board_task = asyncio.to_thread(
                 run_board_analysis,
                 shared_board_path,
