@@ -14,8 +14,6 @@ services:
     container_name: rummikub-python-backend
     ports:
       - "8000:8000"
-    volumes:
-      - ./backend:/app/backend
 
   node-api:
     build:
