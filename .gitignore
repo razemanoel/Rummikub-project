@@ -4,6 +4,7 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
+runs/
 # Environment variables
 .env
 .env.local
@@ -80,3 +81,8 @@ docker-compose.override.yml
 docker-compose.gpu.local.yml
 backend/Dockerfile.gpu.local
 
+yolo26n.pt
+
+# Submission/reference docs kept locally only
+ProjectArchitecture_B7_Final.md
+ProjectArchitecture_B7_Final.pdf
