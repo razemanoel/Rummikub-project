@@ -20,8 +20,6 @@ export class SolverController {
         data: response.data,
       });
     } catch (error: any) {
-      console.error('Solver error:', error.message);
-
       return res.status(500).json({
         success: false,
         message: 'Failed to calculate solution',
@@ -44,8 +42,6 @@ export class SolverController {
         data: response.data,
       });
     } catch (error: any) {
-      console.error('Validation error:', error.message);
-
       return res.status(500).json({
         success: false,
         message: 'Failed to validate game state',

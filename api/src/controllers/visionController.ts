@@ -51,7 +51,6 @@ export class VisionController {
       const statusCode = result.success ? 200 : 400;
       return res.status(statusCode).json(result);
     } catch (error: any) {
-      console.error('Vision analysis error:', error.message);
       return res.status(500).json({
         success: false,
         message: 'Failed to analyze boards: ' + error.message,
@@ -110,8 +109,6 @@ export class VisionController {
         || message.includes('corrections')
           ? 400
           : 500;
-
-      console.error('Vision feedback error:', message);
 
       return res.status(statusCode).json({
         success: false,

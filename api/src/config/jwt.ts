@@ -20,12 +20,3 @@ export function verifyToken(token: string): TokenPayload | null {
     return null;
   }
 }
-
-export function decodeToken(token: string): TokenPayload | null {
-  try {
-    const decoded = jwt.decode(token) as TokenPayload;
-    return decoded;
-  } catch (error) {
-    return null;
-  }
-}

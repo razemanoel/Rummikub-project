@@ -327,11 +327,6 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     letterSpacing: 1,
   },
-  forgotText: {
-    color: '#9db4ff',
-    textAlign: 'center',
-    fontSize: 17,
-  },
   signupRow: {
     flexDirection: 'row',
     justifyContent: 'center',

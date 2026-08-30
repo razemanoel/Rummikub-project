@@ -8,24 +8,6 @@ type MulterFile = Express.Multer.File;
 const VISION_SERVER_URL =
   process.env.VISION_SERVER_URL || 'http://localhost:8000';
 
-/**
- * Represents a detected Rummikub tile
- */
-export interface TileDetection {
-  tile_number: number | null;
-  tile_color: string;
-  confidence: number;
-}
-
-/**
- * Response from Vision server for a single image
- */
-export interface VisionAnalysisResult {
-  status: string;
-  message: string;
-  tiles: TileDetection[] | null;
-}
-
 export interface VisionFeedbackArtifactRequestCorrection {
   feedbackHash: string;
   tileIndex: number;
@@ -86,18 +68,6 @@ export interface FeedbackArtifactResult {
   feedbackHash: string;
   source: 'rack' | 'board';
   savedImagePath: string | null;
-}
-
-/**
- * Combined response returned to the mobile client
- */
-export interface BoardAnalysisResponse {
-  success: boolean;
-  message: string;
-  data: {
-    myBoardDetections: TileDetection[] | null;
-    sharedBoardDetections: TileDetection[] | null;
-  };
 }
 
 class VisionService {
@@ -177,49 +147,7 @@ class VisionService {
       const response = await this.api.get('/health');
       return response.data.status === 'ok';
     } catch (error) {
-      console.error('Vision server health check failed:', error);
       return false;
-    }
-  }
-
-  /**
-   * Send a single image to the Vision server for tile classification
-   *
-   * @param fileBuffer - Buffer of the uploaded image (from multer)
-   * @param filename - Original filename
-   * @param mimetype - Actual MIME type (e.g., image/jpeg, image/png)
-   */
-  private async classifyTiles(
-    fileBuffer: Buffer,
-    filename: string,
-    mimetype: string
-  ): Promise<VisionAnalysisResult> {
-    try {
-      const formData = new FormData();
-
-      // Important: use the real mimetype instead of hardcoding JPEG
-      formData.append('file', fileBuffer, {
-        filename: filename || 'image.jpg',
-        contentType: mimetype,
-      });
-
-      const response = await this.api.post<VisionAnalysisResult>(
-        '/classify-tiles',
-        formData,
-        {
-          headers: formData.getHeaders(),
-        }
-      );
-
-      return response.data;
-    } catch (error: any) {
-      console.error('Failed to classify tiles:', error.message);
-
-      throw new Error(
-        `Vision server error: ${
-          error.response?.data?.message || error.message
-        }`
-      );
     }
   }
 
@@ -275,8 +203,6 @@ async analyzeBoards(
       data: response.data,
     };
   } catch (error: any) {
-    console.error('Board analysis failed:', error.message);
-
     return {
       success: false,
       message: this.formatVisionAnalyzeError(error),

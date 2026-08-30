@@ -169,6 +169,32 @@ All dependencies install automatically inside Docker — no manual `pip install`
 
 ---
 
+### API Documentation (Swagger)
+
+Both backend services expose interactive OpenAPI/Swagger docs once running:
+
+| Service | Swagger UI | Raw OpenAPI JSON |
+|---|---|---|
+| Node API gateway (auth, vision, solver, solutions) | `http://localhost:3000/api/docs` | `http://localhost:3000/api/docs.json` |
+| Python vision/solver service | `http://localhost:8000/docs` | `http://localhost:8000/openapi.json` |
+
+Protected endpoints on the Node API require a JWT: log in via `/api/auth/login` in the docs page, then click **Authorize** and paste the token (`Bearer <token>` is added automatically).
+
+---
+
+### Optional — Cloud storage for vision feedback (AWS S3)
+
+When you correct a tile detection in the review/edit screens, the app saves the photo and the correction as a training example ("vision feedback"), so the models can be retrained later. By default these are saved to local disk (`backend/vision/feedback_dataset/raw/`). They can be stored in **Amazon S3** instead:
+
+1. Create an S3 bucket with **Block all public access** enabled, and an IAM user/policy scoped to just that bucket (`s3:PutObject`, `s3:GetObject`, `s3:DeleteObject`, `s3:ListBucket` on that one bucket's ARN — never broader).
+2. Copy `backend/.env.example` to `backend/.env` and fill in the IAM user's access key, secret key, region, and bucket name. `backend/.env` is git-ignored — never commit real AWS credentials.
+3. `docker compose up --build` — the Python service picks up S3 automatically once `S3_BUCKET_NAME` is set.
+4. Check `http://localhost:8000/storage-status` — it reports `{"backend": "s3", "bucket": "..."}` when wired up correctly, or `{"backend": "local-disk", "bucket": null}` otherwise.
+
+If `backend/.env` is missing or any of the AWS variables are unset, the app falls back to local disk automatically — no AWS account is required to run the project.
+
+---
+
 ### Step 5 — Connect your phone
 
 1. Wait for the Expo QR code to appear in the terminal

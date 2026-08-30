@@ -23,22 +23,6 @@ export async function initializeDatabase() {
     await usersCollection.createIndex({ username: 1 }, { unique: true, sparse: true });
   }
 
-  if (!collectionNames.includes('verification_codes')) {
-    await db.createCollection('verification_codes');
-    const verificationCollection = db.collection('verification_codes');
-    await verificationCollection.createIndex({ expires_at: 1 }, { expireAfterSeconds: 0 }); // TTL index
-  }
-
-  if (!collectionNames.includes('failed_reset_attempts')) {
-    await db.createCollection('failed_reset_attempts');
-    const failedAttemptsCollection = db.collection('failed_reset_attempts');
-    // Auto-delete records older than 24 hours
-    await failedAttemptsCollection.createIndex({ attempted_at: 1 }, { expireAfterSeconds: 86400 });
-    // Index for quick lookups
-    await failedAttemptsCollection.createIndex({ email: 1, attempted_at: -1 });
-    await failedAttemptsCollection.createIndex({ ip_address: 1, attempted_at: -1 });
-  }
-
   if (!collectionNames.includes('vision_feedback')) {
     await db.createCollection('vision_feedback');
   }
@@ -49,8 +33,6 @@ export async function initializeDatabase() {
   await visionFeedbackCollection.createIndex({ source: 1, correctionType: 1, createdAt: -1 });
   await visionFeedbackCollection.createIndex({ classifierModelVersion: 1, detectorModelVersion: 1 });
   await visionFeedbackCollection.createIndex({ feedbackHash: 1 }, { unique: true });
-
-  console.log('MongoDB connected successfully');
 }
 
 export function getDatabase() {
