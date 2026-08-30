@@ -439,8 +439,8 @@ class VisionFeedbackService {
         boardImageFile
       );
       artifactLookup = this.buildArtifactLookup(artifactResults);
-    } catch (error: any) {
-      console.warn('Feedback artifact generation failed:', error.message || error);
+    } catch {
+      // Feedback correction is still saved even if the image artifact fails to persist
     }
 
     const records: VisionFeedbackRecord[] = pendingCorrections.map((correction) => {

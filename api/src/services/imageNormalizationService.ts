@@ -48,12 +48,6 @@ async function transcodeImageBuffer(buffer: Buffer): Promise<Buffer> {
       .jpeg({ quality: 90 })
       .toBuffer();
   } catch (sharpError) {
-    console.warn('[image-normalization] sharp transcode failed', {
-      message: sharpError instanceof Error ? sharpError.message : String(sharpError),
-      magicBytesHex: buffer.subarray(0, 16).toString('hex'),
-      fileTypeBox: buffer.length >= 12 ? buffer.toString('ascii', 4, 12) : null,
-    });
-
     if (!isIsoBaseMediaBuffer(buffer)) {
       throw sharpError;
     }
@@ -64,12 +58,7 @@ async function transcodeImageBuffer(buffer: Buffer): Promise<Buffer> {
         .rotate()
         .jpeg({ quality: 90 })
         .toBuffer();
-    } catch (heicError) {
-      console.warn('[image-normalization] heic-convert fallback failed', {
-        message: heicError instanceof Error ? heicError.message : String(heicError),
-        magicBytesHex: buffer.subarray(0, 16).toString('hex'),
-        fileTypeBox: buffer.length >= 12 ? buffer.toString('ascii', 4, 12) : null,
-      });
+    } catch {
       throw sharpError;
     }
   }

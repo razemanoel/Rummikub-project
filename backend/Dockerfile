@@ -9,9 +9,15 @@ RUN apt-get update && apt-get install -y \
     libx11-6 \
     && rm -rf /var/lib/apt/lists/*
 
-COPY backend/requirements.txt ./backend/requirements.txt
-
+# Install torch/torchvision BEFORE copying requirements.txt, so this slow,
+# multi-hundred-MB download is cached independently of anything in
+# requirements.txt. Otherwise, every time requirements.txt changes (e.g.
+# adding a small package like boto3), Docker invalidates every layer that
+# comes after the COPY of that file — including this one — and re-downloads
+# torch from scratch for no reason.
 RUN pip install --no-cache-dir --index-url https://download.pytorch.org/whl/cpu torch torchvision
+
+COPY backend/requirements.txt ./backend/requirements.txt
 
 RUN pip install --no-cache-dir -r backend/requirements.txt
 

@@ -5,9 +5,6 @@ import {
   ApiResponse,
   SignUpRequest,
   LoginRequest,
-  ForgotPasswordRequest,
-  VerifyResetCodeRequest,
-  ResetPasswordRequest,
 } from '@/types/auth';
 import {
   GameState,
@@ -107,33 +104,6 @@ class ApiService {
       if (response.data.data?.token) {
         await this.setToken(response.data.data.token);
       }
-      return response.data;
-    } catch (error) {
-      return this.handleError(error);
-    }
-  }
-
-  async forgotPassword(data: ForgotPasswordRequest): Promise<ApiResponse> {
-    try {
-      const response = await this.api.post('/auth/forgot-password', data);
-      return response.data;
-    } catch (error) {
-      return this.handleError(error);
-    }
-  }
-
-  async verifyResetCode(data: VerifyResetCodeRequest): Promise<ApiResponse> {
-    try {
-      const response = await this.api.post('/auth/verify-reset-code', data);
-      return response.data;
-    } catch (error) {
-      return this.handleError(error);
-    }
-  }
-
-  async resetPassword(data: ResetPasswordRequest): Promise<ApiResponse> {
-    try {
-      const response = await this.api.post('/auth/reset-password', data);
       return response.data;
     } catch (error) {
       return this.handleError(error);

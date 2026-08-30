@@ -1,10 +1,11 @@
-import { Request, Response } from 'express';
+import { Response } from 'express';
+import { AuthRequest } from '../middleware/auth';
 import { getDatabase } from '../config/database';
 
 export class SolutionHistoryController {
-  static async saveSolution(req: Request, res: Response) {
+  static async saveSolution(req: AuthRequest, res: Response) {
     try {
-      const userId = (req as any).user?.userId || (req as any).user?.id;
+      const userId = req.user?.userId;
 
       if (!userId) {
         return res.status(401).json({
@@ -36,8 +37,6 @@ export class SolutionHistoryController {
         },
       });
     } catch (error) {
-      console.error('Save solution error:', error);
-
       return res.status(500).json({
         success: false,
         message: 'Failed to save solution',
@@ -45,9 +44,9 @@ export class SolutionHistoryController {
     }
   }
 
-  static async getMySolutions(req: Request, res: Response) {
+  static async getMySolutions(req: AuthRequest, res: Response) {
     try {
-      const userId = (req as any).user?.userId || (req as any).user?.id;
+      const userId = req.user?.userId;
 
       if (!userId) {
         return res.status(401).json({
@@ -70,8 +69,6 @@ export class SolutionHistoryController {
         data: solutions,
       });
     } catch (error) {
-      console.error('Get solutions error:', error);
-
       return res.status(500).json({
         success: false,
         message: 'Failed to load solutions',

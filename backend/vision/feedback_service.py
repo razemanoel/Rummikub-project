@@ -1,3 +1,4 @@
+import io
 import json
 from datetime import datetime, timezone
 from pathlib import Path
@@ -6,6 +7,7 @@ from uuid import uuid4
 from PIL import Image
 from pydantic import ValidationError
 
+from backend.vision import s3_storage
 from backend.vision.classifier_service import CLASSIFIER_PATH
 from backend.vision.detector_service import DETECTOR_PATH
 from backend.logic.models import (
@@ -56,11 +58,11 @@ def generate_feedback_artifacts(
 
         if image_path:
             case_id = uuid4().hex
-            RAW_CASES_DIR.mkdir(parents=True, exist_ok=True)
 
             image = Image.open(image_path).convert("RGB")
-            image_file = RAW_CASES_DIR / f"{case_id}.jpg"
-            image.save(image_file, format="JPEG", quality=95)
+            image_buffer = io.BytesIO()
+            image.save(image_buffer, format="JPEG", quality=95)
+            image_bytes = image_buffer.getvalue()
 
             source_detections = getattr(feedback_request.finalImageDetections, source)
             case_data = {
@@ -86,10 +88,24 @@ def generate_feedback_artifacts(
                 ],
                 "timestamp": datetime.now(timezone.utc).isoformat(),
             }
+            case_json_bytes = json.dumps(case_data, indent=2, ensure_ascii=False).encode("utf-8")
 
-            json_file = RAW_CASES_DIR / f"{case_id}.json"
-            json_file.write_text(json.dumps(case_data, indent=2, ensure_ascii=False), encoding="utf-8")
-            saved_image_path = image_file.relative_to(BASE_DIR).as_posix()
+            # Prefer S3 when it's configured (see backend/vision/s3_storage.py);
+            # fall back to local disk so the app still works without an AWS account.
+            saved_image_path = s3_storage.upload_bytes(
+                f"{case_id}.jpg", image_bytes, "image/jpeg"
+            )
+            if saved_image_path:
+                s3_storage.upload_bytes(
+                    f"{case_id}.json", case_json_bytes, "application/json"
+                )
+            else:
+                RAW_CASES_DIR.mkdir(parents=True, exist_ok=True)
+                image_file = RAW_CASES_DIR / f"{case_id}.jpg"
+                image_file.write_bytes(image_bytes)
+                json_file = RAW_CASES_DIR / f"{case_id}.json"
+                json_file.write_bytes(case_json_bytes)
+                saved_image_path = image_file.relative_to(BASE_DIR).as_posix()
 
         for correction in source_corrections:
             artifacts.append(

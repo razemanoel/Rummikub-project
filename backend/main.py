@@ -31,6 +31,7 @@ from backend.vision.board_reconstructor import (
     sort_rack_detections,
     group_detections_into_rows,
 )
+from backend.vision import s3_storage
 
 
 app = FastAPI(title="Rummikub Vision Service", version="0.4.0")
@@ -39,6 +40,19 @@ app = FastAPI(title="Rummikub Vision Service", version="0.4.0")
 @app.get("/health")
 def health():
     return {"status": "ok"}
+
+
+@app.get("/storage-status")
+def storage_status():
+    """
+    Reports whether vision-feedback images are currently being stored in
+    S3 or falling back to local disk. Handy for the demo / for confirming
+    the AWS setup is actually wired up correctly.
+    """
+    return {
+        "backend": "s3" if s3_storage.is_enabled() else "local-disk",
+        "bucket": s3_storage.S3_BUCKET_NAME if s3_storage.is_enabled() else None,
+    }
 
 
 @app.on_event("startup")
