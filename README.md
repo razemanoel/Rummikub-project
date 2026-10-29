@@ -8,11 +8,11 @@ Take a picture of your rack and the shared board — the app detects every tile,
 
 ## 🎥 Project Demo
 
-A 2-minute, 27-second walkthrough of the mobile app: image upload, tile recognition, manual review, and move recommendations.
+Watch the 2-minute, 27-second walkthrough of the mobile application, including tile detection, manual corrections, and optimal move recommendations.
 
-**Demo video:** [▶ Watch / download the project demo (MP4)](https://raw.githubusercontent.com/razemanoel/Rummikub-project/docs/portfolio-readme-demo/docs/Project_Demo.mp4)
+[![Watch the Rummikub Solver demo on YouTube](https://img.youtube.com/vi/oJeuiDVfU0k/hqdefault.jpg)](https://www.youtube.com/shorts/oJeuiDVfU0k)
 
-*The link opens the video file directly, bypassing GitHub's file-preview page.*
+**[▶ Watch the project demo on YouTube](https://www.youtube.com/shorts/oJeuiDVfU0k)**
 
 ---
 
