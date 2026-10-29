@@ -22,7 +22,6 @@ Watch the 2-minute, 27-second walkthrough of the mobile application, including t
 - [Overview](#overview)
 - [Features](#features)
 - [Architecture](#architecture)
-- [Engineering Contributions](#engineering-contributions)
 - [Model Performance](#model-performance)
 - [Tech Stack](#tech-stack)
 - [Project Structure](#project-structure)
@@ -99,19 +98,6 @@ The system is a three-tier architecture with an optional cloud storage layer:
 - **Amazon S3** *(optional)* — when configured, tile-correction feedback (the image plus the correction JSON) is written to a private S3 bucket instead of local disk, so it isn't lost when a container restarts.
 
 The whole stack (MongoDB, Node API, Python service) is deployed on a single **AWS EC2** free-tier instance — see [Cloud Deployment](#cloud-deployment-aws-ec2) below. Locally, the same stack runs with a single `docker compose up`.
-
----
-
-## Engineering Contributions
-
-This was a two-person capstone project. **Raz Emanoel focused on the computer-vision pipeline and its integration into the application**, including:
-
-- Training and refining the YOLOv8 tile detector and ResNet18 tile classifier.
-- Implementing image-processing and board-reconstruction logic, including duplicate-detection filtering and support for different rack/background conditions.
-- Integrating detection and classification with the Python/FastAPI service and the application workflow.
-- Developing the correction-feedback workflow to collect labeled examples for future model improvement.
-
-The ILP-based move solver was primarily developed by the project partner.
 
 ---
 
