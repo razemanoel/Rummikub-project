@@ -10,9 +10,9 @@ Take a picture of your rack and the shared board — the app detects every tile,
 
 Watch the 2-minute, 27-second walkthrough of the mobile application, including tile detection, manual corrections, and optimal move recommendations.
 
-[![Watch the Rummikub Solver demo on YouTube](https://img.youtube.com/vi/oJeuiDVfU0k/hqdefault.jpg)](https://www.youtube.com/shorts/oJeuiDVfU0k)
+[![Watch the Rummikub Solver demo on YouTube](https://img.youtube.com/vi/z13Xu0FDMpQ/hqdefault.jpg)](https://www.youtube.com/shorts/z13Xu0FDMpQ)
 
-**[▶ Watch the project demo on YouTube](https://www.youtube.com/shorts/oJeuiDVfU0k)**
+**[▶ Watch the project demo on YouTube](https://www.youtube.com/shorts/z13Xu0FDMpQ)**
 
 ---
 
