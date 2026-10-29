@@ -6,11 +6,24 @@ Take a picture of your rack and the shared board — the app detects every tile,
 
 ---
 
+## 🎥 Project Demo
+
+A 2-minute, 27-second walkthrough of the mobile app: image upload, tile recognition, manual review, and move recommendations.
+
+**Demo video:** [Watch the project demo](docs/Rummikub_Project_Demo_optimized.mp4)
+
+> The video file will be added to this branch before merging this PR. The link above is intentionally a placeholder until upload is complete.
+
+---
+
 ## Table of Contents
 
+- [Project Demo](#-project-demo)
 - [Overview](#overview)
 - [Features](#features)
 - [Architecture](#architecture)
+- [Engineering Contributions](#engineering-contributions)
+- [Model Performance](#model-performance)
 - [Tech Stack](#tech-stack)
 - [Project Structure](#project-structure)
 - [Setup and Running](#setup-and-running)
@@ -86,6 +99,31 @@ The system is a three-tier architecture with an optional cloud storage layer:
 - **Amazon S3** *(optional)* — when configured, tile-correction feedback (the image plus the correction JSON) is written to a private S3 bucket instead of local disk, so it isn't lost when a container restarts.
 
 The whole stack (MongoDB, Node API, Python service) is deployed on a single **AWS EC2** free-tier instance — see [Cloud Deployment](#cloud-deployment-aws-ec2) below. Locally, the same stack runs with a single `docker compose up`.
+
+---
+
+## Engineering Contributions
+
+This was a two-person capstone project. **Raz Emanoel focused on the computer-vision pipeline and its integration into the application**, including:
+
+- Training and refining the YOLOv8 tile detector and ResNet18 tile classifier.
+- Implementing image-processing and board-reconstruction logic, including duplicate-detection filtering and support for different rack/background conditions.
+- Integrating detection and classification with the Python/FastAPI service and the application workflow.
+- Developing the correction-feedback workflow to collect labeled examples for future model improvement.
+
+The ILP-based move solver was primarily developed by the project partner.
+
+---
+
+## Model Performance
+
+Results below are **validation-set metrics**, not end-to-end accuracy under real-world use.
+
+| Component | Validation result |
+|---|---|
+| YOLOv8 tile detector | Precision ≈ 98.6%; Recall ≈ 98.9%; mAP@50 ≈ 98.5% |
+| ResNet18 tile classifier | Accuracy ≈ 99.78% across 53 tile classes |
+| Detection dataset | 2,154 images, including train/validation/test splits |
 
 ---
 
