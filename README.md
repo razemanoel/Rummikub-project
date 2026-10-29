@@ -12,8 +12,6 @@ A 2-minute, 27-second walkthrough of the mobile app: image upload, tile recognit
 
 **Demo video:** [Watch the project demo](docs/Project_Demo.mp4)
 
-> Upload `Project_Demo.mp4` to the `docs/` folder on this branch to activate the link.
-
 ---
 
 ## Table of Contents
