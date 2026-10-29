@@ -6,11 +6,23 @@ Take a picture of your rack and the shared board — the app detects every tile,
 
 ---
 
+## 🎥 Project Demo
+
+Watch the 2-minute, 27-second walkthrough of the mobile application, including tile detection, manual corrections, and optimal move recommendations.
+
+[![Watch the Rummikub Solver demo on YouTube](https://img.youtube.com/vi/oJeuiDVfU0k/hqdefault.jpg)](https://www.youtube.com/shorts/oJeuiDVfU0k)
+
+**[▶ Watch the project demo on YouTube](https://www.youtube.com/shorts/oJeuiDVfU0k)**
+
+---
+
 ## Table of Contents
 
+- [Project Demo](#-project-demo)
 - [Overview](#overview)
 - [Features](#features)
 - [Architecture](#architecture)
+- [Model Performance](#model-performance)
 - [Tech Stack](#tech-stack)
 - [Project Structure](#project-structure)
 - [Setup and Running](#setup-and-running)
@@ -86,6 +98,18 @@ The system is a three-tier architecture with an optional cloud storage layer:
 - **Amazon S3** *(optional)* — when configured, tile-correction feedback (the image plus the correction JSON) is written to a private S3 bucket instead of local disk, so it isn't lost when a container restarts.
 
 The whole stack (MongoDB, Node API, Python service) is deployed on a single **AWS EC2** free-tier instance — see [Cloud Deployment](#cloud-deployment-aws-ec2) below. Locally, the same stack runs with a single `docker compose up`.
+
+---
+
+## Model Performance
+
+Results below are **validation-set metrics**, not end-to-end accuracy under real-world use.
+
+| Component | Validation result |
+|---|---|
+| YOLOv8 tile detector | Precision ≈ 98.6%; Recall ≈ 98.9%; mAP@50 ≈ 98.5% |
+| ResNet18 tile classifier | Accuracy ≈ 99.78% across 53 tile classes |
+| Detection dataset | 2,154 images, including train/validation/test splits |
 
 ---
 
