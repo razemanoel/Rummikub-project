@@ -1,5 +1,7 @@
 # Rummikub Solver
 
+[![CI](https://github.com/razemanoel/Rummikub-project/actions/workflows/ci.yml/badge.svg)](https://github.com/razemanoel/Rummikub-project/actions/workflows/ci.yml)
+
 An AI-powered mobile assistant that finds the optimal move in a Rummikub game from a photo.
 
 Take a picture of your rack and the shared board — the app detects every tile, lets you fix any mistakes, then solves the board and shows you exactly what to play.
@@ -30,6 +32,7 @@ Watch the 2-minute, 27-second walkthrough of the mobile application, including t
 - [Cloud Storage (AWS S3)](#optional--cloud-storage-for-vision-feedback-aws-s3)
 - [Cloud Deployment (AWS EC2)](#cloud-deployment-aws-ec2)
 - [Testing](#testing)
+- [Continuous Integration (CI)](#continuous-integration-ci)
 - [Application Flow](#application-flow)
 
 ---
@@ -333,6 +336,29 @@ The live instance's address isn't published here on purpose: this is a mobile ap
 
 ## Testing
 
+The project has two kinds of tests, which trade coverage for speed:
+
+| | Unit tests | Integration tests |
+|---|---|---|
+| File | `tests/test_logic.py` | `tests/test_api_integration.py` |
+| What they check | Set/board validation and the ILP solver, in isolation | The full stack end-to-end over HTTP |
+| Needs | `pydantic`, `pulp`, `pytest` only | Docker Compose: MongoDB, Node API, Python service with PyTorch and both models |
+| Runtime | About 1 second | Minutes (image build + model inference) |
+| Runs in CI | Yes, on every pull request | Not yet, run manually |
+
+### Unit tests
+
+Cover legal and illegal runs and groups, jokers filling gaps and extending runs, the 1–13 boundary (no 13→1 wrap-around), tile value limits, the "at most two copies of each tile" rule, and a basic solver case.
+
+**To run** (from the project root):
+
+```bash
+pip install pydantic "pulp>=2.8.0,<4" pytest
+python -m pytest tests/test_logic.py -v
+```
+
+### Integration tests
+
 Integration tests live in `tests/test_api_integration.py` and run as real HTTP requests against the live stack — no mocking. They mirror the project's core user stories one-to-one:
 
 | Test | User story |
@@ -351,6 +377,32 @@ docker compose up                                  # from the project root, in a
 pip install requests pytest --break-system-packages
 pytest tests/test_api_integration.py -v -s
 ```
+
+---
+
+## Continuous Integration (CI)
+
+Every pull request, and every push to `main`, runs the GitHub Actions workflow in [`.github/workflows/ci.yml`](.github/workflows/ci.yml). It has three jobs that run in parallel on clean Ubuntu runners; a pull request should only be merged when all three are green.
+
+| Job | Steps | Catches |
+|---|---|---|
+| **API (type-check)** | `npm ci` → `tsc --noEmit` in `api/` | TypeScript errors in the Node/Express gateway |
+| **Mobile (type-check + lint)** | `npm ci` → `tsc --noEmit` → `npm run lint` in `mobile/` | TypeScript errors and ESLint errors in the Expo app (warnings are reported but don't fail the build) |
+| **Python logic (unit tests)** | install `pydantic` + `pulp` → `pytest tests/test_logic.py` | Regressions in game rules and the ILP solver, and breaking dependency upgrades |
+
+Design choices:
+
+- **Same runtimes as production** — Node 20 and Python 3.11, matching `api/Dockerfile` and `backend/Dockerfile`.
+- **Reproducible installs** — `npm ci` installs the exact versions in `package-lock.json`; the Python job reads its `pydantic`/`pulp` constraints from `backend/requirements.txt`, so versions are defined in one place.
+- **Fast and cheap** — no Docker images, PyTorch or model weights in the per-PR path; a full run takes about 1.5 minutes.
+- **Safe defaults** — read-only token permissions, a 10-minute timeout per job, and a new push cancels the previous outdated run.
+
+What CI does **not** do yet:
+
+- Run the integration tests against a full Docker Compose stack.
+- Build Docker images or deploy (no CD). The AWS EC2 demo is still deployed manually.
+
+> **Example:** adding the unit tests exposed that PuLP 4 removed the `LpVariable(name, cat=...)` API used by `solver_ilp.py`, so a fresh install of `requirements.txt` broke the solver. The dependency is now pinned to `pulp>=2.8.0,<4`.
 
 ---
 
