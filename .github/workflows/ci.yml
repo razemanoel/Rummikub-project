@@ -1,6 +1,7 @@
-name: CI
+name: CI/CD
 
 # When to run: every pull request, and every push to main (i.e. after a merge).
+# CI jobs run on both; the delivery job runs only on main.
 on:
   pull_request:
   push:
@@ -71,3 +72,62 @@ jobs:
           cat /tmp/req-logic.txt
           pip install -r /tmp/req-logic.txt pytest
       - run: python -m pytest tests/test_logic.py -v
+
+  # ---------- CD: build and publish Docker images (main only) ----------
+  # Continuous Delivery: every merge to main that passes all CI jobs produces
+  # versioned, ready-to-deploy images in GitHub Container Registry (ghcr.io).
+  # Deployment to EC2 is still a manual step that pulls one of these images.
+  publish-images:
+    name: Publish image (${{ matrix.name }})
+    needs: [api, mobile, python-logic]   # only after every CI job is green
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30                  # the Python image includes PyTorch
+    permissions:
+      contents: read
+      packages: write                    # needed to push to ghcr.io
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: api
+            context: ./api
+            dockerfile: ./api/Dockerfile
+            image: rummikub-api
+          - name: python-backend
+            context: .
+            dockerfile: ./backend/Dockerfile
+            image: rummikub-python-backend
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: docker/setup-buildx-action@v4
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}   # built-in, no secret to create
+
+      - name: Compute tags
+        id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ghcr.io/${{ github.repository_owner }}/${{ matrix.image }}
+          # sha-<commit>: immutable, use this to deploy or roll back
+          # latest: moving pointer to the newest main build
+          tags: |
+            type=sha,prefix=sha-
+            type=raw,value=latest
+
+      - name: Build and push
+        uses: docker/build-push-action@v7
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.dockerfile }}
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha,scope=${{ matrix.name }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.name }}
