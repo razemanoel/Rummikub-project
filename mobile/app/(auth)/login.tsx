@@ -197,7 +197,7 @@ export default function LoginScreen() {
 
           {/* Sign Up Link */}
           <View style={styles.signupRow}>
-            <Text style={styles.signupText}>Don't have an account? </Text>
+            <Text style={styles.signupText}>Don&apos;t have an account? </Text>
             <TouchableOpacity onPress={handleSignUp} disabled={loading}>
               <Text style={styles.signupLink}>Sign Up</Text>
             </TouchableOpacity>
