@@ -32,7 +32,7 @@ Watch the 2-minute, 27-second walkthrough of the mobile application, including t
 - [Cloud Storage (AWS S3)](#optional--cloud-storage-for-vision-feedback-aws-s3)
 - [Cloud Deployment (AWS EC2)](#cloud-deployment-aws-ec2)
 - [Testing](#testing)
-- [Continuous Integration (CI)](#continuous-integration-ci)
+- [CI/CD](#cicd)
 - [Application Flow](#application-flow)
 
 ---
@@ -380,9 +380,13 @@ pytest tests/test_api_integration.py -v -s
 
 ---
 
-## Continuous Integration (CI)
+## CI/CD
 
-Every pull request, and every push to `main`, runs the GitHub Actions workflow in [`.github/workflows/ci.yml`](.github/workflows/ci.yml). It has three jobs that run in parallel on clean Ubuntu runners; a pull request should only be merged when all three are green.
+Every pull request, and every push to `main`, runs the GitHub Actions workflow in [`.github/workflows/ci.yml`](.github/workflows/ci.yml).
+
+### Continuous Integration
+
+Three jobs run in parallel on clean Ubuntu runners; a pull request should only be merged when all three are green.
 
 | Job | Steps | Catches |
 |---|---|---|
@@ -397,10 +401,26 @@ Design choices:
 - **Fast and cheap** — no Docker images, PyTorch or model weights in the per-PR path; a full run takes about 1.5 minutes.
 - **Safe defaults** — read-only token permissions, a 10-minute timeout per job, and a new push cancels the previous outdated run.
 
-What CI does **not** do yet:
+### Continuous Delivery
 
-- Run the integration tests against a full Docker Compose stack.
-- Build Docker images or deploy (no CD). The AWS EC2 demo is still deployed manually.
+After a merge to `main`, and only if all three CI jobs pass, the `publish-images` job builds the two backend services and publishes them to GitHub Container Registry:
+
+| Image | Built from |
+|---|---|
+| `ghcr.io/razemanoel/rummikub-api` | `api/Dockerfile` |
+| `ghcr.io/razemanoel/rummikub-python-backend` | `backend/Dockerfile` (includes PyTorch and the trained models) |
+
+Each image gets two tags:
+
+- `sha-<commit>` — immutable and traceable to the exact commit. Deploy or roll back by choosing a tag.
+- `latest` — always points to the newest `main` build.
+
+Docker layer caching (`type=gha`) keeps rebuilds fast when only application code changes.
+
+### Not automated yet
+
+- Integration tests against a full Docker Compose stack.
+- Deployment itself: the AWS EC2 demo is updated manually (pull an image tag and restart). There is no automatic deploy step.
 
 > **Example:** adding the unit tests exposed that PuLP 4 removed the `LpVariable(name, cat=...)` API used by `solver_ilp.py`, so a fresh install of `requirements.txt` broke the solver. The dependency is now pinned to `pulp>=2.8.0,<4`.
 
