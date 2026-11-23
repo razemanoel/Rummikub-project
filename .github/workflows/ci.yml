@@ -1,0 +1,73 @@
+name: CI
+
+# When to run: every pull request, and every push to main (i.e. after a merge).
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# Least privilege: CI only needs to read the code.
+permissions:
+  contents: read
+
+# A new push to the same branch cancels the previous, now outdated, run.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ---------- Node/Express API gateway ----------
+  api:
+    name: API (type-check)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: api
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 20            # same as api/Dockerfile (node:20)
+          cache: npm
+          cache-dependency-path: api/package-lock.json
+      - run: npm ci                   # exact versions from package-lock.json
+      - run: npx tsc --noEmit         # type errors fail the build
+
+  # ---------- React Native / Expo client ----------
+  mobile:
+    name: Mobile (type-check + lint)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+      - run: npm ci
+      - run: npx tsc --noEmit
+      - run: npm run lint             # expo lint; errors fail, warnings don't
+
+  # ---------- Python game logic + ILP solver (no torch, no models) ----------
+  python-logic:
+    name: Python logic (unit tests)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"     # same as backend/Dockerfile
+      - name: Install logic dependencies only
+        # Take pydantic and pulp lines straight from requirements.txt, so the
+        # version constraints live in one place and cannot drift apart.
+        run: |
+          grep -E '^(pydantic|pulp)' backend/requirements.txt > /tmp/req-logic.txt
+          cat /tmp/req-logic.txt
+          pip install -r /tmp/req-logic.txt pytest
+      - run: python -m pytest tests/test_logic.py -v
